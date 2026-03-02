@@ -1,35 +1,14 @@
-#!/usr/bin/env sh
-
-if [ -z "${BASH_VERSION:-}" ]; then
-  if ! command -v bash >/dev/null 2>&1; then
-    echo "[dotfiles] bash is required to run this installer." >&2
-    exit 1
-  fi
-
-  if ! command -v curl >/dev/null 2>&1; then
-    echo "[dotfiles] curl is required to bootstrap this installer from sh stdin." >&2
-    exit 1
-  fi
-
-  if [ "${0}" != "sh" ] && [ -f "${0}" ]; then
-    exec /usr/bin/env bash "${0}" "$@"
-  fi
-
-  if [ ! -t 0 ]; then
-    DOTFILES_REPO_INSTALL="${DOTFILES_REPO_INSTALL:-https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh}"
-    curl -fsSL "${DOTFILES_REPO_INSTALL}" | /usr/bin/env bash -s -- "$@"
-    exit $?
-  fi
-
-  echo "[dotfiles] unable to determine script path while running under sh." >&2
-  exit 1
-fi
+#!/usr/bin/env bash
 
 set -euo pipefail
 
 DOTFILES_REPO_URL="https://github.com/maciej/dotfiles.git"
 DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/.dotfiles}"
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
+
+log() {
+  printf "[dotfiles] %s\n" "$1"
+}
 
 # shellcheck disable=SC3030
 BREW_PACKAGES=(
@@ -52,32 +31,31 @@ BREW_CASKS=(
   zed
 )
 
-log() {
-  printf "[dotfiles] %s\n" "$1"
-}
-
 bootstrap() {
-  if [[ -f "${SCRIPT_SOURCE}" && "${SCRIPT_SOURCE}" != "-" && "${SCRIPT_SOURCE}" != /dev/stdin && "${SCRIPT_SOURCE}" != /dev/fd/* ]]; then
-    DOTFILES_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
-    log "Using existing script location at ${DOTFILES_DIR}"
-    return
-  fi
+  case "${SCRIPT_SOURCE}" in
+    /dev/stdin|/dev/fd/*|stdin|-)
+      log "Running installer from stdin; bootstrapping repository in ${DOTFILES_DIR}"
 
-  log "Running installer from stdin; bootstrapping repository in ${DOTFILES_DIR}"
+      if [[ ! -d "${DOTFILES_DIR}" ]]; then
+        command -v git >/dev/null 2>&1 || {
+          log "git is required to bootstrap dotfiles from a remote installer."
+          exit 1
+        }
+        git clone --depth 1 "${DOTFILES_REPO_URL}" "${DOTFILES_DIR}"
+      elif [[ ! -d "${DOTFILES_DIR}/.git" ]]; then
+        log "Destination exists but is not a git repository: ${DOTFILES_DIR}"
+        log "Set DOTFILES_DIR to a different path and retry."
+        exit 1
+      fi
 
-  if [[ ! -d "${DOTFILES_DIR}" ]]; then
-    command -v git >/dev/null 2>&1 || {
-      log "git is required to bootstrap dotfiles from a remote installer."
-      exit 1
-    }
-    git clone --depth 1 "${DOTFILES_REPO_URL}" "${DOTFILES_DIR}"
-  elif [[ ! -d "${DOTFILES_DIR}/.git" ]]; then
-    log "Destination exists but is not a git repository: ${DOTFILES_DIR}"
-    log "Set DOTFILES_DIR to a different path and retry."
-    exit 1
-  fi
+      exec bash "${DOTFILES_DIR}/install.sh" "$@"
+      ;;
 
-  exec bash "${DOTFILES_DIR}/install.sh" "$@"
+    *)
+      DOTFILES_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
+      log "Using existing script location at ${DOTFILES_DIR}"
+      ;;
+  esac
 }
 
 bootstrap "$@"
@@ -143,10 +121,23 @@ install_brew_casks() {
 
 link_dotfiles() {
   if command -v stow >/dev/null 2>&1; then
-    local flags=(-v --restow --target="${HOME}" --dir="${DOTFILES_DIR}" .)
-    if [[ "${DOTFILES_STOW_ADOPT:-false}" == "true" ]]; then
-      flags=(-v --restow --adopt --target="${HOME}" --dir="${DOTFILES_DIR}" .)
+    local restow="${DOTFILES_STOW_RESTOW:-false}"
+    local adopt="${DOTFILES_STOW_ADOPT:-false}"
+    local -a flags=(
+      -v
+      --target="${HOME}"
+      --dir="${DOTFILES_DIR}"
+    )
+
+    if [[ "${restow}" == "true" || "${adopt}" == "true" ]]; then
+      flags+=(--restow)
     fi
+
+    if [[ "${DOTFILES_STOW_ADOPT:-false}" == "true" ]]; then
+      flags+=(--adopt)
+    fi
+
+    flags+=(.)
 
     log "Linking dotfiles with stow"
     if ! stow "${flags[@]}"; then

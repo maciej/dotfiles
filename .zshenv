@@ -15,6 +15,16 @@ path_prepend "/opt/homebrew/sbin"
 
 export PATH
 
+# Optional SOPS key path.
+if [[ -f "$HOME/.config/sops/age/keys.txt" ]]; then
+  export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"
+fi
+
+# Optional Rust/Cargo environment.
+if [[ -f "$HOME/.cargo/env" ]]; then
+  . "$HOME/.cargo/env"
+fi
+
 # Set editor based on session type:
 # - Local: prefer zed --wait
 # - SSH: prefer nvim, then vim
