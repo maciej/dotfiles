@@ -155,14 +155,14 @@ main() {
   local os
   os="$(uname -s 2>/dev/null || true)"
 
-  if [[ "${os}" != "Darwin" ]]; then
-    log "Non-macOS host detected (${os:-unknown}); skipping Homebrew bootstrap"
-    exit 0
+  if [[ "${os}" == "Darwin" ]]; then
+    ensure_brew
+    install_brew_packages
+    install_brew_casks
+  else
+    log "Non-macOS host detected (${os:-unknown}); skipping Homebrew setup"
   fi
 
-  ensure_brew
-  install_brew_packages
-  install_brew_casks
   link_dotfiles
 }
 
