@@ -1,10 +1,14 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
+
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env BASH_INSTALL_SCRIPT="${0}" bash -s -- "$@"
+fi
 
 set -euo pipefail
 
 DOTFILES_REPO_URL="https://github.com/maciej/dotfiles.git"
 DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/.dotfiles}"
-SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
+SCRIPT_SOURCE="${BASH_INSTALL_SCRIPT:-${BASH_SOURCE[0]:-}}"
 
 BREW_PACKAGES=(
   tmux
