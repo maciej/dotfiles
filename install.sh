@@ -1,15 +1,37 @@
 #!/usr/bin/env sh
 
 if [ -z "${BASH_VERSION:-}" ]; then
-  exec /usr/bin/env BASH_INSTALL_SCRIPT="${0}" bash -s -- "$@"
+  if ! command -v bash >/dev/null 2>&1; then
+    echo "[dotfiles] bash is required to run this installer." >&2
+    exit 1
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "[dotfiles] curl is required to bootstrap this installer from sh stdin." >&2
+    exit 1
+  fi
+
+  if [ "${0}" != "sh" ] && [ -f "${0}" ]; then
+    exec /usr/bin/env bash "${0}" "$@"
+  fi
+
+  if [ ! -t 0 ]; then
+    DOTFILES_REPO_INSTALL="${DOTFILES_REPO_INSTALL:-https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh}"
+    curl -fsSL "${DOTFILES_REPO_INSTALL}" | /usr/bin/env bash -s -- "$@"
+    exit $?
+  fi
+
+  echo "[dotfiles] unable to determine script path while running under sh." >&2
+  exit 1
 fi
 
 set -euo pipefail
 
 DOTFILES_REPO_URL="https://github.com/maciej/dotfiles.git"
 DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/.dotfiles}"
-SCRIPT_SOURCE="${BASH_INSTALL_SCRIPT:-${BASH_SOURCE[0]:-}}"
+SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
 
+# shellcheck disable=SC3030
 BREW_PACKAGES=(
   tmux
   fish
