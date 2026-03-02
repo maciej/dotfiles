@@ -1,0 +1,56 @@
+[user]
+	name = Maciej Biłas
+	email = maciej@bilas.io
+[alias]
+	st = status
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
+	lgv = log --date=iso --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cd) %C(bold blue)%an %Creset%Cblue<%ae>%Creset' --abbrev-commit
+	cp = cherry-pick
+	co = checkout
+	smu = !git submodule sync --recursive && git submodule update --init --recursive
+	cane = commit --amend --no-edit
+	# keep this handy alias close to the old workflow, remove if you don't need it
+	pf = push --force-with-lease
+	pr = "!f() { git fetch origin pull/$1/head:$2; }; f"
+	rebase-main = "!f() { git fetch origin main && git rebase origin/main; }; f"
+[core]
+	excludesfile = ~/.gitignore
+	autocrlf = input
+	precomposeunicode = true
+	editor = zed --wait
+	filemode = false
+[credential]
+	helper = osxkeychain
+[init]
+	defaultBranch = main
+[push]
+	autoSetupRemote = true
+[fetch]
+	prune = true
+[diff]
+	algorithm = histogram
+	colorMoved = default
+	tool = zed
+[difftool "zed"]
+	cmd = zed --wait $LOCAL $REMOTE
+[commit]
+	gpgsign = false
+[tag]
+	gpgsign = false
+[merge]
+	conflictStyle = zdiff3
+[branch]
+	sort = -committerdate
+[column]
+	ui = auto
+[rebase]
+	autosquash = true
+[log]
+	decorate = true
+[pull]
+	rebase = true
+[filter "lfs"]
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f

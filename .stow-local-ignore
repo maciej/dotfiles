@@ -3,3 +3,6 @@ LICENSE
 install.sh
 .git
 .github
+.idea
+AGENTS.md
+CLAUDE.md

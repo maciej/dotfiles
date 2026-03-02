@@ -13,8 +13,16 @@ BREW_PACKAGES=(
   bash
   jq
   sqlite
+  stow
   uv
 )
+
+# Install non-preview cask apps
+BREW_CASKS=(
+  zed
+)
+
+DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() {
   printf "[dotfiles] %s\n" "$1"
@@ -57,6 +65,47 @@ install_brew_packages() {
   brew install "${missing[@]}"
 }
 
+install_brew_casks() {
+  local installed missing cask
+  installed=$'\n'"$(brew list --cask 2>/dev/null || true)"$'\n'
+  missing=()
+
+  for cask in "${BREW_CASKS[@]}"; do
+    if [[ "${installed}" == *$'\n'"${cask}"$'\n'* ]]; then
+      log "Already installed cask: ${cask}"
+    else
+      missing+=("${cask}")
+    fi
+  done
+
+  if (( ${#missing[@]} == 0 )); then
+    log "All requested cask apps are already installed"
+    return
+  fi
+
+  log "Installing missing brew casks: ${missing[*]}"
+  brew install --cask "${missing[@]}"
+}
+
+link_dotfiles() {
+  if command -v stow >/dev/null 2>&1; then
+    local flags=(-v --restow --target="${HOME}" --dir="${DOTFILES_DIR}" .)
+    if [[ "${DOTFILES_STOW_ADOPT:-false}" == "true" ]]; then
+      flags=(-v --restow --adopt --target="${HOME}" --dir="${DOTFILES_DIR}" .)
+    fi
+
+    log "Linking dotfiles with stow"
+    if ! stow "${flags[@]}"; then
+      log "Stow reported conflicts. Existing non-symlink files already exist."
+      log "Set DOTFILES_STOW_ADOPT=true to adopt existing files into this repo, then relaunch install."
+      return 1
+    fi
+  else
+    log "GNU Stow not installed; skipping symlink setup"
+    return 1
+  fi
+}
+
 main() {
   local os
   os="$(uname -s 2>/dev/null || true)"
@@ -68,6 +117,8 @@ main() {
 
   ensure_brew
   install_brew_packages
+  install_brew_casks
+  link_dotfiles
 }
 
 main "$@"
