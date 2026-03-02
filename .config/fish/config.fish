@@ -1,16 +1,7 @@
-if status is-interactive
-    # Commands to run in interactive sessions can go here
-end
-
 set -gx HOMEBREW_NO_ENV_HINTS 1
 
-if test -d "$HOME/go/bin"; and not contains -- "$HOME/go/bin" $PATH
-    set -gx PATH "$HOME/go/bin" $PATH
-end
-
-if test -d "$HOME/.local/bin"; and not contains -- "$HOME/.local/bin" $PATH
-    set -gx PATH "$HOME/.local/bin" $PATH
-end
+fish_add_path "$HOME/go/bin"
+fish_add_path "$HOME/.local/bin"
 
 set -l in_ssh 0
 if set -q SSH_TTY
@@ -47,9 +38,7 @@ set -x LC_ALL en_US.UTF-8
 set -x LC_TIME pl_PL.UTF-8
 
 if test (uname -s) = Darwin
-    if test -d "/Applications/IntelliJ IDEA.app/Contents/MacOS"; and not contains -- "/Applications/IntelliJ IDEA.app/Contents/MacOS" $PATH
-        set -gx PATH "/Applications/IntelliJ IDEA.app/Contents/MacOS" $PATH
-    end
+    fish_add_path "/Applications/IntelliJ IDEA.app/Contents/MacOS"
 end
 
 if test -f "$HOME/.config/sops/age/keys.txt"
@@ -70,5 +59,15 @@ end
 if command -q himalaya
     function himalaya --wraps himalaya
         RUST_LOG=error command himalaya $argv
+    end
+end
+
+if status is-interactive
+    # Commands to run in interactive sessions can go here
+    if not set -q TMUX
+        and command -q tmux
+        and test -r /proc/device-tree/model
+        and string match -qi '*raspberry pi*' (cat /proc/device-tree/model)
+        exec tmux
     end
 end
