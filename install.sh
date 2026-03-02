@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+DOTFILES_REPO_URL="https://github.com/maciej/dotfiles.git"
+DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/.dotfiles}"
+SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
+
 BREW_PACKAGES=(
   tmux
   fish
@@ -22,11 +26,35 @@ BREW_CASKS=(
   zed
 )
 
-DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 log() {
   printf "[dotfiles] %s\n" "$1"
 }
+
+bootstrap() {
+  if [[ -f "${SCRIPT_SOURCE}" && "${SCRIPT_SOURCE}" != "-" && "${SCRIPT_SOURCE}" != /dev/stdin && "${SCRIPT_SOURCE}" != /dev/fd/* ]]; then
+    DOTFILES_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
+    log "Using existing script location at ${DOTFILES_DIR}"
+    return
+  fi
+
+  log "Running installer from stdin; bootstrapping repository in ${DOTFILES_DIR}"
+
+  if [[ ! -d "${DOTFILES_DIR}" ]]; then
+    command -v git >/dev/null 2>&1 || {
+      log "git is required to bootstrap dotfiles from a remote installer."
+      exit 1
+    }
+    git clone --depth 1 "${DOTFILES_REPO_URL}" "${DOTFILES_DIR}"
+  elif [[ ! -d "${DOTFILES_DIR}/.git" ]]; then
+    log "Destination exists but is not a git repository: ${DOTFILES_DIR}"
+    log "Set DOTFILES_DIR to a different path and retry."
+    exit 1
+  fi
+
+  exec bash "${DOTFILES_DIR}/install.sh" "$@"
+}
+
+bootstrap "$@"
 
 ensure_brew() {
   if command -v brew >/dev/null 2>&1; then

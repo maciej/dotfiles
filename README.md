@@ -14,8 +14,10 @@ Inspired by Matt's repo: [elithrar/dotfiles](https://github.com/elithrar/dotfile
 Run:
 
 ```sh
-sh install.sh 2>&1 | tee ~/install.log
+curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | sh 2>&1 | tee ~/install.log
 ```
+
+By default, the remote bootstrap installs into `~/.dotfiles`. Override with `DOTFILES_DIR` if you prefer a different destination.
 
 ### Link dotfiles with Stow
 
