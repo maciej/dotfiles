@@ -1,0 +1,23 @@
+.config/fish/config.fish
+  315cc236b45af139 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.42",
+  "base_commit_sha": "287cb5a9cef0cbe149a0481e1083b77d813d71cf",
+  "prompts": {
+    "315cc236b45af139": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_34bf71b7fffesRLZWLZ57XABG5",
+        "model": "anthropic/claude-opus-4-6"
+      },
+      "human_author": "Maciej Biłas <maciej@cloudflare.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
