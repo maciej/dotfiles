@@ -1,0 +1,27 @@
+.zshenv
+  3bbaabca7553651a 28-32
+.gitconfig
+  3bbaabca7553651a 16-20,27-28,64-68
+.config/fish/config.fish
+  3bbaabca7553651a 2,79-83,93-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.42",
+  "base_commit_sha": "6691fc65e4f79dfee8e22771de7949168bedf0f8",
+  "prompts": {
+    "3bbaabca7553651a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_34c26fa81ffetAsE4Tc12jjTTY",
+        "model": "anthropic/claude-opus-4-6"
+      },
+      "human_author": "Maciej Biłas <maciej@bilas.io>",
+      "messages": [],
+      "total_additions": 35,
+      "total_deletions": 5,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
