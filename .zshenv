@@ -25,6 +25,11 @@ if [[ -f "$HOME/.cargo/env" ]]; then
   . "$HOME/.cargo/env"
 fi
 
+# Optional Cloudflare WARP certs.
+if [[ -f "$HOME/.local/share/cloudflare-warp-certs/config.sh" ]]; then
+  . "$HOME/.local/share/cloudflare-warp-certs/config.sh"
+fi
+
 # Set editor based on session type:
 # - Local: prefer zed --wait
 # - SSH: prefer nvim, then vim

@@ -1,4 +1,5 @@
 set -gx HOMEBREW_NO_ENV_HINTS 1
+set -gx DOCKER_CLI_HINTS false
 
 # Keep ANSI colors when paging with less.
 if not set -q LESS
@@ -75,6 +76,11 @@ if command -q himalaya
     end
 end
 
+# Cloudflare WARP certs (harmless no-op when file is absent).
+if test -f "$HOME/.local/share/cloudflare-warp-certs/config.fish"
+    source "$HOME/.local/share/cloudflare-warp-certs/config.fish"
+end
+
 if status is-interactive
     # Commands to run in interactive sessions can go here
     if not set -q TMUX
@@ -83,4 +89,9 @@ if status is-interactive
         and string match -qi '*raspberry pi*' (cat /proc/device-tree/model)
         exec tmux
     end
+end
+
+# Local, machine-specific overrides.
+if test -f "$HOME/.config/fish/config.local.fish"
+    source "$HOME/.config/fish/config.local.fish"
 end

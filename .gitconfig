@@ -13,12 +13,19 @@
 	pf = push --force-with-lease
 	pr = "!f() { git fetch origin pull/$1/head:$2; }; f"
 	rebase-main = "!f() { git fetch origin main && git rebase origin/main; }; f"
+	sw = switch
+	lgnc = log --graph --pretty=format:'%h -%d %s (%cr) <%an>' --abbrev-commit
+	lgvf = log --date=iso --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cd) %C(bold blue)%an %Creset%Cblue<%ae>%Creset' --abbrev-commit
+	authors = !git shortlog -s | sort -nbr
+	last-msg = !git log --format='%B' -n 1 ${1:-HEAD}
 [core]
 	excludesfile = ~/.gitignore
 	autocrlf = input
 	precomposeunicode = true
 	editor = zed --wait
 	filemode = false
+	fsmonitor = true
+	untrackedCache = true
 [credential]
 	helper = osxkeychain
 [init]
@@ -54,3 +61,8 @@
 	required = true
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
+[includeIf "hasconfig:remote.*.url:git@gitlab.cfdata.org:*/**"]
+	path = ~/.gitconfig-cloudflare
+[includeIf "hasconfig:remote.*.url:ssh://git@gitlab.cfdata.org/**"]
+	path = ~/.gitconfig-cloudflare
+
