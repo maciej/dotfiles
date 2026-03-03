@@ -1,0 +1,23 @@
+.config/fish/functions/fish_prompt.fish
+  3bbaabca7553651a 1-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.42",
+  "base_commit_sha": "45ea98632de0e76177f10c2e25f3ef9cdc3243a2",
+  "prompts": {
+    "3bbaabca7553651a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_34c26fa81ffetAsE4Tc12jjTTY",
+        "model": "anthropic/claude-opus-4-6"
+      },
+      "human_author": "Maciej Biłas <maciej@bilas.io>",
+      "messages": [],
+      "total_additions": 109,
+      "total_deletions": 0,
+      "accepted_lines": 109,
+      "overriden_lines": 0
+    }
+  }
+}
