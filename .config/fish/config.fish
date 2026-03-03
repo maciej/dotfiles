@@ -7,7 +7,7 @@ if not set -q LESS
 else
     set -l less_flags "$LESS"
     for flag in -R -F -X
-        if not string match -rq -- "(^|\\s)$flag(\\s|$)" $less_flags
+        if not string match -rq -- '(^|\s)'"$flag"'(\s|$)' $less_flags
             set less_flags "$less_flags $flag"
         end
     end
