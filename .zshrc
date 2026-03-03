@@ -8,6 +8,16 @@ fi
 alias ls='ls -G'
 alias ll='ls -lahG'
 
+# Keep ANSI colors when paging with less.
+if [[ -z "${LESS-}" ]]; then
+  export LESS='-R -F -X'
+else
+  [[ " ${LESS} " != *" -R "* ]] && LESS="${LESS} -R"
+  [[ " ${LESS} " != *" -F "* ]] && LESS="${LESS} -F"
+  [[ " ${LESS} " != *" -X "* ]] && LESS="${LESS} -X"
+  export LESS
+fi
+
 # zsh completion system (required before any script that calls compdef)
 fpath=("$HOME/.zsh/completions" $fpath)
 autoload -Uz compinit

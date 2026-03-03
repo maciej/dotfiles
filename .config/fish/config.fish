@@ -1,5 +1,18 @@
 set -gx HOMEBREW_NO_ENV_HINTS 1
 
+# Keep ANSI colors when paging with less.
+if not set -q LESS
+    set -gx LESS "-R -F -X"
+else
+    set -l less_flags "$LESS"
+    for flag in -R -F -X
+        if not string match -rq -- "(^|\\s)$flag(\\s|$)" $less_flags
+            set less_flags "$less_flags $flag"
+        end
+    end
+    set -gx LESS "$less_flags"
+end
+
 fish_add_path "$HOME/go/bin"
 fish_add_path "$HOME/.local/bin"
 
