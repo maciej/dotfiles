@@ -28,10 +28,19 @@ BREW_PACKAGES=(
 
 # shellcheck disable=SC3030
 APT_PACKAGES=(
+  curl
+  fish
+  fzf
+  gh
+  git
+  jq
+  ripgrep
+  sqlite3
   stow
   tmux
   vim
   neovim
+  zoxide
   zsh
 )
 
@@ -133,6 +142,26 @@ install_apt_packages() {
   sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
 }
 
+install_uv_linux() {
+  local uv_bin="${HOME}/.local/bin/uv"
+
+  if command -v uv >/dev/null 2>&1 || [[ -x "${uv_bin}" ]]; then
+    log "uv already installed"
+    return
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    log "Installing uv via Astral official installer"
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${HOME}/.local/bin" UV_NO_MODIFY_PATH=1 sh
+  elif command -v wget >/dev/null 2>&1; then
+    log "Installing uv via Astral official installer"
+    wget -qO- https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${HOME}/.local/bin" UV_NO_MODIFY_PATH=1 sh
+  else
+    log "uv installer requires curl or wget"
+    return 1
+  fi
+}
+
 install_brew_packages() {
   local installed missing pkg
   installed=$'\n'"$(brew list --formula)"$'\n'
@@ -219,6 +248,7 @@ main() {
     install_brew_casks
   elif is_debian_apt_host; then
     install_apt_packages
+    install_uv_linux
   else
     log "Unsupported package manager on host (${os:-unknown}); skipping package installation"
   fi
