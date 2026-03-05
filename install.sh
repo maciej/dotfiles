@@ -206,6 +206,42 @@ install_brew_casks() {
   brew install --cask "${missing[@]}"
 }
 
+remove_legacy_ghostty_config_macos() {
+  local ghostty_dir="${HOME}/Library/Application Support/com.mitchellh.ghostty"
+  local -a legacy_files=(
+    "${ghostty_dir}/config"
+    "${ghostty_dir}"/config.*.bak
+  )
+  local file removed=false
+
+  if [[ ! -d "${ghostty_dir}" ]]; then
+    log "No legacy Ghostty config directory found"
+    return
+  fi
+
+  shopt -s nullglob
+  for file in "${legacy_files[@]}"; do
+    if [[ -e "${file}" ]]; then
+      rm -f "${file}"
+      removed=true
+      log "Removed legacy Ghostty config: ${file}"
+    fi
+  done
+  shopt -u nullglob
+
+  if [[ "${removed}" == "false" ]]; then
+    log "No legacy Ghostty config files found"
+    return
+  fi
+
+  if [[ -z "$(find "${ghostty_dir}" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    rmdir "${ghostty_dir}"
+    log "Removed empty legacy Ghostty config directory"
+  else
+    log "Legacy Ghostty config directory still has other contents; leaving it in place"
+  fi
+}
+
 link_dotfiles() {
   if command -v stow >/dev/null 2>&1; then
     local restow="${DOTFILES_STOW_RESTOW:-false}"
@@ -246,6 +282,7 @@ main() {
     ensure_brew
     install_brew_packages
     install_brew_casks
+    remove_legacy_ghostty_config_macos
   elif is_debian_apt_host; then
     install_apt_packages
     install_uv_linux
