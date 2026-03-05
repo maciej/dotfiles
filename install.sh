@@ -26,6 +26,15 @@ BREW_PACKAGES=(
   uv
 )
 
+# shellcheck disable=SC3030
+APT_PACKAGES=(
+  stow
+  tmux
+  vim
+  neovim
+  zsh
+)
+
 # Install non-preview cask apps
 BREW_CASKS=(
   zed
@@ -89,6 +98,39 @@ ensure_brew() {
   elif [[ -x "/usr/local/bin/brew" ]]; then
     eval "$(/usr/local/bin/brew shellenv)"
   fi
+}
+
+is_debian_apt_host() {
+  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+  command -v apt-get >/dev/null 2>&1 || return 1
+  [[ -r /etc/os-release ]] || return 1
+
+  grep -Eqi '^(ID|ID_LIKE)=.*(debian|ubuntu)' /etc/os-release
+}
+
+install_apt_packages() {
+  local missing pkg status
+  missing=()
+
+  log "Updating apt package metadata"
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get update
+
+  for pkg in "${APT_PACKAGES[@]}"; do
+    status="$(dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null || true)"
+    if [[ "${status}" == "install ok installed" ]]; then
+      log "Already installed: ${pkg}"
+    else
+      missing+=("${pkg}")
+    fi
+  done
+
+  if (( ${#missing[@]} == 0 )); then
+    log "All requested apt packages are already installed"
+    return
+  fi
+
+  log "Installing missing apt packages: ${missing[*]}"
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
 }
 
 install_brew_packages() {
@@ -175,8 +217,10 @@ main() {
     ensure_brew
     install_brew_packages
     install_brew_casks
+  elif is_debian_apt_host; then
+    install_apt_packages
   else
-    log "Non-macOS host detected (${os:-unknown}); skipping Homebrew setup"
+    log "Unsupported package manager on host (${os:-unknown}); skipping package installation"
   fi
 
   link_dotfiles
