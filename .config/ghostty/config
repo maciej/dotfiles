@@ -1,0 +1,9 @@
+# Ghostty config shared across macOS and Linux via XDG.
+theme = Catppuccin Macchiato
+
+# Only LEFT Option acts as Alt (ESC-modifier) for terminal keybinds.
+# RIGHT Option remains macOS Option (diacritics on Polish layout).
+macos-option-as-alt = left
+
+# Force Shift+Enter to send ESC + CR.
+keybind = shift+enter=text:\x1b\r
