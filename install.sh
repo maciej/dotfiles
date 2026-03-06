@@ -5,9 +5,43 @@ set -euo pipefail
 DOTFILES_REPO_URL="https://github.com/maciej/dotfiles.git"
 DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/.dotfiles}"
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
+UPGRADE=false
 
 log() {
   printf "[dotfiles] %s\n" "$1"
+}
+
+print_help() {
+  cat <<EOF
+Usage: install.sh [--upgrade] [--help]
+
+Install dotfiles packages and link configuration files.
+
+Options:
+  --upgrade  On Linux, upgrade Helix and uv when they are managed by the
+             non-apt installer path. Does not run apt upgrade or brew upgrade.
+  --help     Show this help message and exit.
+EOF
+}
+
+parse_args() {
+  while (( $# > 0 )); do
+    case "$1" in
+      --upgrade)
+        UPGRADE=true
+        ;;
+      --help)
+        print_help
+        exit 0
+        ;;
+      *)
+        log "Unknown argument: $1"
+        print_help
+        exit 1
+        ;;
+    esac
+    shift
+  done
 }
 
 # shellcheck disable=SC3030
@@ -92,6 +126,7 @@ bootstrap() {
   esac
 }
 
+parse_args "$@"
 bootstrap "$@"
 
 ensure_brew() {
@@ -144,17 +179,30 @@ install_apt_packages() {
 
 install_uv_linux() {
   local uv_bin="${HOME}/.local/bin/uv"
+  local installed=false
 
   if command -v uv >/dev/null 2>&1 || [[ -x "${uv_bin}" ]]; then
+    installed=true
+  fi
+
+  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
     log "uv already installed"
     return
   fi
 
   if command -v curl >/dev/null 2>&1; then
-    log "Installing uv via Astral official installer"
+    if [[ "${installed}" == "true" ]]; then
+      log "Upgrading uv via Astral official installer"
+    else
+      log "Installing uv via Astral official installer"
+    fi
     curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${HOME}/.local/bin" UV_NO_MODIFY_PATH=1 sh
   elif command -v wget >/dev/null 2>&1; then
-    log "Installing uv via Astral official installer"
+    if [[ "${installed}" == "true" ]]; then
+      log "Upgrading uv via Astral official installer"
+    else
+      log "Installing uv via Astral official installer"
+    fi
     wget -qO- https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${HOME}/.local/bin" UV_NO_MODIFY_PATH=1 sh
   else
     log "uv installer requires curl or wget"
@@ -165,8 +213,13 @@ install_uv_linux() {
 install_helix_linux() {
   local helix_bin="${HOME}/.local/bin/hx"
   local arch asset_pattern asset_url extracted_dir tarball tmp_dir
+  local installed=false
 
   if command -v hx >/dev/null 2>&1 || [[ -x "${helix_bin}" ]]; then
+    installed=true
+  fi
+
+  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
     log "helix already installed"
     return
   fi
@@ -233,7 +286,11 @@ install_helix_linux() {
   cp -R "${extracted_dir}/runtime" "${HOME}/.config/helix/runtime"
 
   rm -rf "${tmp_dir}"
-  log "Installed Helix from official release asset"
+  if [[ "${installed}" == "true" ]]; then
+    log "Upgraded Helix from official release asset"
+  else
+    log "Installed Helix from official release asset"
+  fi
 }
 
 install_brew_packages() {
