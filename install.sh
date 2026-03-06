@@ -14,6 +14,7 @@ log() {
 BREW_PACKAGES=(
   tmux
   fish
+  helix
   git
   fzf
   ripgrep
@@ -39,7 +40,6 @@ APT_PACKAGES=(
   stow
   tmux
   vim
-  neovim
   zoxide
   zsh
 )
@@ -160,6 +160,80 @@ install_uv_linux() {
     log "uv installer requires curl or wget"
     return 1
   fi
+}
+
+install_helix_linux() {
+  local helix_bin="${HOME}/.local/bin/hx"
+  local arch asset_pattern asset_url extracted_dir tarball tmp_dir
+
+  if command -v hx >/dev/null 2>&1 || [[ -x "${helix_bin}" ]]; then
+    log "helix already installed"
+    return
+  fi
+
+  arch="$(uname -m 2>/dev/null || true)"
+  case "${arch}" in
+    aarch64|arm64)
+      asset_pattern="aarch64-linux.tar.xz"
+      ;;
+    x86_64|amd64)
+      asset_pattern="x86_64-linux.tar.xz"
+      ;;
+    armv6l|armv7l|armhf)
+      log "No official Helix Linux release is available for ${arch}; skipping Helix installation"
+      return
+      ;;
+    *)
+      log "Unsupported Helix Linux architecture (${arch:-unknown}); skipping Helix installation"
+      return
+      ;;
+  esac
+
+  command -v curl >/dev/null 2>&1 || {
+    log "Helix installer requires curl"
+    return 1
+  }
+  command -v jq >/dev/null 2>&1 || {
+    log "Helix installer requires jq"
+    return 1
+  }
+  command -v tar >/dev/null 2>&1 || {
+    log "Helix installer requires tar"
+    return 1
+  }
+
+  asset_url="$(
+    curl -fsSL https://api.github.com/repos/helix-editor/helix/releases/latest \
+      | jq -r --arg pattern "${asset_pattern}" '.assets[] | select(.name | endswith($pattern)) | .browser_download_url' \
+      | head -n 1
+  )"
+
+  if [[ -z "${asset_url}" ]]; then
+    log "Could not find an official Helix release asset for ${arch}"
+    return 1
+  fi
+
+  tmp_dir="$(mktemp -d)"
+  tarball="${tmp_dir}/helix.tar.xz"
+
+  curl -fsSL "${asset_url}" -o "${tarball}"
+  tar -xJf "${tarball}" -C "${tmp_dir}"
+
+  extracted_dir="$(find "${tmp_dir}" -mindepth 1 -maxdepth 1 -type d -name 'helix-*' | head -n 1)"
+  if [[ -z "${extracted_dir}" || ! -x "${extracted_dir}/hx" || ! -d "${extracted_dir}/runtime" ]]; then
+    rm -rf "${tmp_dir}"
+    log "Helix release archive did not contain the expected files"
+    return 1
+  fi
+
+  mkdir -p "${HOME}/.local/bin" "${HOME}/.config/helix"
+  install -m 0755 "${extracted_dir}/hx" "${helix_bin}"
+
+  rm -rf "${HOME}/.config/helix/runtime"
+  cp -R "${extracted_dir}/runtime" "${HOME}/.config/helix/runtime"
+
+  rm -rf "${tmp_dir}"
+  log "Installed Helix from official release asset"
 }
 
 install_brew_packages() {
@@ -285,6 +359,7 @@ main() {
     remove_legacy_ghostty_config_macos
   elif is_debian_apt_host; then
     install_apt_packages
+    install_helix_linux
     install_uv_linux
   else
     log "Unsupported package manager on host (${os:-unknown}); skipping package installation"
