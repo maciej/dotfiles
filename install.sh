@@ -56,7 +56,7 @@ BREW_PACKAGES=(
   gh
   bash
   jq
-  python
+  python3
   sqlite
   stow
   uv
