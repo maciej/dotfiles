@@ -7,3 +7,5 @@ deploy.sh
 .idea
 AGENTS.md
 CLAUDE.md
+.config/zed/settings.json
+scripts

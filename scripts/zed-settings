@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+LOCAL_ONLY_KEYS = {"ssh_connections"}
+EXIT_CONFLICT = 2
+
+
+class ConfigError(Exception):
+    pass
+
+
+class ConflictError(ConfigError):
+    pass
+
+
+def strip_json_comments(text: str) -> str:
+    result: list[str] = []
+    in_string = False
+    escape = False
+    in_line_comment = False
+    in_block_comment = False
+    index = 0
+
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+
+        if in_line_comment:
+            if char == "\n":
+                in_line_comment = False
+                result.append(char)
+            index += 1
+            continue
+
+        if in_block_comment:
+            if char == "*" and next_char == "/":
+                in_block_comment = False
+                index += 2
+            else:
+                index += 1
+            continue
+
+        if in_string:
+            result.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+
+        if char == '"':
+            in_string = True
+            result.append(char)
+            index += 1
+            continue
+
+        if char == "/" and next_char == "/":
+            in_line_comment = True
+            index += 2
+            continue
+
+        if char == "/" and next_char == "*":
+            in_block_comment = True
+            index += 2
+            continue
+
+        result.append(char)
+        index += 1
+
+    if in_block_comment or in_string:
+        raise ConfigError("invalid JSONC input")
+
+    return "".join(result)
+
+
+def load_json(path: Path, *, allow_comments: bool) -> dict[str, Any]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ConfigError(f"missing file: {path}") from exc
+
+    if allow_comments:
+        text = strip_json_comments(text)
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"failed to parse JSON in {path}: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise ConfigError(f"expected top-level object in {path}")
+
+    return data
+
+
+def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=path.parent, delete=False
+    ) as handle:
+        json.dump(data, handle, indent=2)
+        handle.write("\n")
+        temp_name = handle.name
+    os.replace(temp_name, path)
+
+
+def default_paths(repo_root: Path) -> tuple[Path, Path, Path]:
+    xdg_config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    zed_dir = xdg_config_home / "zed"
+    return (
+        repo_root / ".config" / "zed" / "settings.json",
+        zed_dir / "settings.local.json",
+        zed_dir / "settings.json",
+    )
+
+
+def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+    repo_root = Path(args.repo_root).expanduser().resolve()
+    shared_default, local_default, live_default = default_paths(repo_root)
+    shared = Path(args.shared or shared_default).expanduser()
+    local = Path(args.local or local_default).expanduser()
+    live = Path(args.live or live_default).expanduser()
+    return shared, local, live
+
+
+def validate_shared(data: dict[str, Any], path: Path) -> None:
+    unexpected = sorted(LOCAL_ONLY_KEYS.intersection(data))
+    if unexpected:
+        keys = ", ".join(unexpected)
+        raise ConfigError(f"{path} must not contain local-only keys: {keys}")
+
+
+def validate_local(data: dict[str, Any], path: Path) -> None:
+    unexpected = sorted(set(data) - LOCAL_ONLY_KEYS)
+    if unexpected:
+        keys = ", ".join(unexpected)
+        raise ConfigError(f"{path} contains unsupported top-level keys: {keys}")
+
+
+def live_is_newer_than_sources(
+    live_path: Path, source_paths: list[Path], *, force: bool
+) -> None:
+    if force or not live_path.exists():
+        return
+
+    live_mtime = live_path.stat().st_mtime_ns
+    source_mtimes = [path.stat().st_mtime_ns for path in source_paths if path.exists()]
+    if not source_mtimes:
+        return
+
+    if live_mtime > max(source_mtimes):
+        raise ConflictError(
+            f"{live_path} is newer than the tracked/shared inputs; "
+            "run `./scripts/zed-settings pull` first or rerun with `push --force`"
+        )
+
+
+def source_is_older_than_targets(
+    source_path: Path, target_paths: list[Path], *, force: bool
+) -> None:
+    if force or not source_path.exists():
+        return
+
+    source_mtime = source_path.stat().st_mtime_ns
+    newer_targets = [path for path in target_paths if path.exists() and path.stat().st_mtime_ns > source_mtime]
+    if not newer_targets:
+        return
+
+    target_list = ", ".join(str(path) for path in newer_targets)
+    raise ConflictError(
+        f"{target_list} is newer than {source_path}; "
+        "rerun with `pull --force` if you intentionally want the live Zed settings to win"
+    )
+
+
+def local_payload_from_live(data: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    ssh_connections = data.get("ssh_connections")
+    if ssh_connections:
+        payload["ssh_connections"] = ssh_connections
+    return payload
+
+
+def pull(shared_path: Path, local_path: Path, live_path: Path, *, force: bool) -> None:
+    source_is_older_than_targets(live_path, [shared_path, local_path], force=force)
+    live = load_json(live_path, allow_comments=True)
+    shared = {key: value for key, value in live.items() if key not in LOCAL_ONLY_KEYS}
+    local = local_payload_from_live(live)
+
+    write_json_atomic(shared_path, shared)
+    if local:
+        write_json_atomic(local_path, local)
+    elif local_path.exists():
+        local_path.unlink()
+
+
+def push(shared_path: Path, local_path: Path, live_path: Path, *, force: bool) -> None:
+    shared = load_json(shared_path, allow_comments=False)
+    validate_shared(shared, shared_path)
+    live_is_newer_than_sources(live_path, [shared_path, local_path], force=force)
+
+    merged = dict(shared)
+    if local_path.exists():
+        local = load_json(local_path, allow_comments=False)
+        validate_local(local, local_path)
+        merged.update(local)
+
+    write_json_atomic(live_path, merged)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Split and merge shared/local Zed settings."
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=Path(__file__).resolve().parent.parent,
+        help="Dotfiles repository root. Defaults to the parent of this script.",
+    )
+    parser.add_argument("--shared", help="Path to the tracked shared settings file.")
+    parser.add_argument("--local", help="Path to the local-only settings file.")
+    parser.add_argument("--live", help="Path to the live Zed settings file.")
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    pull_parser = subparsers.add_parser(
+        "pull", help="Split the live settings into shared and local files."
+    )
+    pull_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the shared/local files even if they are newer than the live settings.",
+    )
+    push_parser = subparsers.add_parser(
+        "push", help="Merge the shared and local files into the live settings."
+    )
+    push_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the live settings even if they are newer than the repo inputs.",
+    )
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    shared_path, local_path, live_path = resolve_paths(args)
+
+    try:
+        if args.command == "pull":
+            pull(shared_path, local_path, live_path, force=args.force)
+        elif args.command == "push":
+            push(shared_path, local_path, live_path, force=args.force)
+        else:
+            raise ConfigError(f"unsupported command: {args.command}")
+    except ConflictError as exc:
+        print(f"zed-settings: {exc}", file=sys.stderr)
+        return EXIT_CONFLICT
+    except ConfigError as exc:
+        print(f"zed-settings: {exc}", file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

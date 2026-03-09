@@ -56,6 +56,7 @@ BREW_PACKAGES=(
   gh
   bash
   jq
+  python
   sqlite
   stow
   uv
@@ -69,6 +70,7 @@ APT_PACKAGES=(
   gh
   git
   jq
+  python3
   ripgrep
   sqlite3
   stow
@@ -405,6 +407,30 @@ link_dotfiles() {
   fi
 }
 
+sync_zed_settings() {
+  local script_path="${DOTFILES_DIR}/scripts/zed-settings"
+  local status
+
+  if [[ ! -f "${script_path}" ]]; then
+    log "Zed settings helper is missing: ${script_path}"
+    return 1
+  fi
+
+  log "Generating live Zed settings"
+  if "${script_path}" push; then
+    return 0
+  else
+    status=$?
+  fi
+
+  if [[ "${status}" -eq 2 ]]; then
+    log "Skipping live Zed settings update because the local file is newer; run ./scripts/zed-settings pull or rerun push --force"
+    return 0
+  fi
+
+  return "${status}"
+}
+
 main() {
   local os
   os="$(uname -s 2>/dev/null || true)"
@@ -423,6 +449,7 @@ main() {
   fi
 
   link_dotfiles
+  sync_zed_settings
 }
 
 main "$@"
