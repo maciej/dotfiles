@@ -6,6 +6,7 @@ DOTFILES_REPO_URL="https://github.com/maciej/dotfiles.git"
 DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/.dotfiles}"
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
 UPGRADE=false
+SYNC_ZED_SETTINGS=false
 
 log() {
   printf "[dotfiles] %s\n" "$1"
@@ -13,14 +14,17 @@ log() {
 
 print_help() {
   cat <<EOF
-Usage: install.sh [--upgrade] [--help]
+Usage: install.sh [--upgrade] [--sync-zed-settings] [--help]
 
 Install dotfiles packages and link configuration files.
 
 Options:
-  --upgrade  On Linux, upgrade Helix and uv when they are managed by the
-             non-apt installer path. Does not run apt upgrade or brew upgrade.
-  --help     Show this help message and exit.
+  --upgrade            On Linux, upgrade Helix and uv when they are managed by
+                       the non-apt installer path. Does not run apt upgrade or
+                       brew upgrade.
+  --sync-zed-settings  Regenerate ~/.config/zed/settings.json from the tracked
+                       shared settings after linking dotfiles.
+  --help               Show this help message and exit.
 EOF
 }
 
@@ -29,6 +33,9 @@ parse_args() {
     case "$1" in
       --upgrade)
         UPGRADE=true
+        ;;
+      --sync-zed-settings)
+        SYNC_ZED_SETTINGS=true
         ;;
       --help)
         print_help
@@ -451,7 +458,11 @@ main() {
   fi
 
   link_dotfiles
-  sync_zed_settings
+  if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
+    sync_zed_settings
+  else
+    log "Skipping Zed settings sync by default; pass --sync-zed-settings to enable it"
+  fi
 }
 
 main "$@"
