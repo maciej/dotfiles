@@ -1,0 +1,10 @@
+$if mode=emacs
+"\e\177": backward-kill-word
+"\e\b": backward-kill-word
+$endif
+
+$if mode=vi
+set keymap vi-insert
+"\e\177": backward-kill-word
+"\e\b": backward-kill-word
+$endif

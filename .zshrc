@@ -77,6 +77,13 @@ if [[ -n "${BREW_PREFIX}" && -f "$BREW_PREFIX/share/zsh-autosuggestions/zsh-auto
   source "$BREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
 fi
 
+# Make Option/Alt+Backspace reliably delete the previous word, including over
+# SSH to hosts with older/default Zsh keymaps.
+bindkey -M emacs '^[^?' backward-kill-word
+bindkey -M emacs '^[^H' backward-kill-word
+bindkey -M viins '^[^?' backward-kill-word
+bindkey -M viins '^[^H' backward-kill-word
+
 # --- Prompt (fast, fish-like, left-only) ---
 autoload -Uz vcs_info add-zsh-hook
 zstyle ':vcs_info:*' enable git
