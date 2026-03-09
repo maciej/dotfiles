@@ -7,3 +7,6 @@ macos-option-as-alt = left
 
 # Force Shift+Enter to send ESC + CR.
 keybind = shift+enter=text:\x1b\r
+
+# Word delete (backward)
+keybind = alt+backspace=text:"\x1b\x7f"
