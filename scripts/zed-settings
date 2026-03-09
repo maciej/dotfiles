@@ -162,8 +162,8 @@ def live_is_newer_than_sources(
 
     if live_mtime > max(source_mtimes):
         raise ConflictError(
-            f"{live_path} is newer than the tracked/shared inputs; "
-            "run `./scripts/zed-settings pull` first or rerun with `push --force`"
+            f"{live_path} is newer than the source files; "
+            "run `pull` first or use `push --force`"
         )
 
 
@@ -181,7 +181,7 @@ def source_is_older_than_targets(
     target_list = ", ".join(str(path) for path in newer_targets)
     raise ConflictError(
         f"{target_list} is newer than {source_path}; "
-        "rerun with `pull --force` if you intentionally want the live Zed settings to win"
+        "use `pull --force` to overwrite"
     )
 
 

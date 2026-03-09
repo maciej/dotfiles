@@ -56,7 +56,7 @@ BREW_PACKAGES=(
   gh
   bash
   jq
-  python3
+  python
   sqlite
   stow
   uv
@@ -297,11 +297,13 @@ install_helix_linux() {
 
 install_brew_packages() {
   local installed missing pkg
-  installed=$'\n'"$(brew list --formula)"$'\n'
+  installed=$'\n'"$(brew list --versions "${BREW_PACKAGES[@]}" 2>/dev/null || true)"$'\n'
   missing=()
 
   for pkg in "${BREW_PACKAGES[@]}"; do
-    if [[ "${installed}" == *$'\n'"${pkg}"$'\n'* ]]; then
+    if [[ "${installed}" == *$'\n'"${pkg} "* ]] || [[ "${installed}" == *$'\n'"${pkg}@"* ]]; then
+      log "Already installed: ${pkg}"
+    elif brew list --versions "${pkg}" >/dev/null 2>&1; then
       log "Already installed: ${pkg}"
     else
       missing+=("${pkg}")
@@ -424,7 +426,7 @@ sync_zed_settings() {
   fi
 
   if [[ "${status}" -eq 2 ]]; then
-    log "Skipping live Zed settings update because the local file is newer; run ./scripts/zed-settings pull or rerun push --force"
+    log "Skipping Zed settings update; live file is newer"
     return 0
   fi
 
