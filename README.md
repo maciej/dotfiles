@@ -46,10 +46,13 @@ When you change Zed settings through Zed itself, pull those edits back into the 
 
 ```sh
 cd ~/.dotfiles
+./scripts/zed-settings diff
 ./scripts/zed-settings pull
 git diff
 ```
 
 That command updates the tracked shared settings file, writes `ssh_connections` into `~/.config/zed/settings.local.json`, and removes `ssh_connections` from the tracked repo copy.
+
+`./scripts/zed-settings diff` compares the shared repo settings against the shared portion of the live `~/.config/zed/settings.json` using normalized JSON, so comment changes, formatting differences, key ordering, and local-only keys like `ssh_connections` do not add noise. It exits with status `1` when differences are present and prints a unified diff.
 
 Both `push` and `pull` refuse to overwrite a newer destination file by default: `push` will not replace a newer live `~/.config/zed/settings.json`, and `pull` will not replace newer tracked or local source files. Use `--force` only when you intentionally want the command’s source side to win.
