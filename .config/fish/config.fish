@@ -27,9 +27,9 @@ else if set -q SSH_CLIENT
 end
 
 if test $in_ssh -eq 1
-    if command -q nvim
-        set -gx EDITOR nvim
-        set -gx VISUAL nvim
+    if command -q hx
+        set -gx EDITOR hx
+        set -gx VISUAL hx
     else if command -q vim
         set -gx EDITOR vim
         set -gx VISUAL vim
@@ -38,9 +38,9 @@ else
     if command -q zed
         set -gx EDITOR "zed --wait"
         set -gx VISUAL "zed --wait"
-    else if command -q nvim
-        set -gx EDITOR nvim
-        set -gx VISUAL nvim
+    else if command -q hx
+        set -gx EDITOR hx
+        set -gx VISUAL hx
     else if command -q vim
         set -gx EDITOR vim
         set -gx VISUAL vim

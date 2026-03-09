@@ -32,11 +32,11 @@ fi
 
 # Set editor based on session type:
 # - Local: prefer zed --wait
-# - SSH: prefer nvim, then vim
+# - Terminal fallback: prefer hx, then vim
 if [[ -n "${SSH_TTY-}" || -n "${SSH_CONNECTION-}" || -n "${SSH_CLIENT-}" ]]; then
-  if command -v nvim >/dev/null 2>&1; then
-    export EDITOR=nvim
-    export VISUAL=nvim
+  if command -v hx >/dev/null 2>&1; then
+    export EDITOR=hx
+    export VISUAL=hx
   elif command -v vim >/dev/null 2>&1; then
     export EDITOR=vim
     export VISUAL=vim
@@ -45,9 +45,9 @@ else
   if command -v zed >/dev/null 2>&1; then
     export EDITOR="zed --wait"
     export VISUAL="zed --wait"
-  elif command -v nvim >/dev/null 2>&1; then
-    export EDITOR=nvim
-    export VISUAL=nvim
+  elif command -v hx >/dev/null 2>&1; then
+    export EDITOR=hx
+    export VISUAL=hx
   elif command -v vim >/dev/null 2>&1; then
     export EDITOR=vim
     export VISUAL=vim
