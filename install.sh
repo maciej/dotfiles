@@ -238,13 +238,15 @@ install_git_delta_linux() {
 
   version="${tag#v}"
   download_url="https://github.com/dandavison/delta/releases/download/${tag}/git-delta_${version}_${deb_arch}.deb"
-  tmp_dir="$(mktemp -d)"
+  tmp_dir="$(mktemp -d -p /tmp git-delta.XXXXXX)"
+  chmod 755 "${tmp_dir}"
 
   if ! curl -fsSL "${download_url}" -o "${tmp_dir}/git-delta.deb"; then
     rm -rf "${tmp_dir}"
     log "Could not download git-delta release package for ${deb_arch}"
     return 1
   fi
+  chmod 644 "${tmp_dir}/git-delta.deb"
 
   sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${tmp_dir}/git-delta.deb"
   rm -rf "${tmp_dir}"
