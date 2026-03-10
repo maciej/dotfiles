@@ -12,6 +12,7 @@ path_prepend "$HOME/go/bin"
 path_prepend "$HOME/.local/bin"
 path_prepend "/opt/homebrew/bin"
 path_prepend "/opt/homebrew/sbin"
+path_prepend "/opt/homebrew/opt/postgresql/bin"
 
 export PATH
 
