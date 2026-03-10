@@ -18,8 +18,18 @@ else
   export LESS
 fi
 
+# Detect Homebrew prefix when available (macOS or Linuxbrew); empty elsewhere.
+if command -v brew >/dev/null 2>&1; then
+  BREW_PREFIX="$(brew --prefix)"
+else
+  BREW_PREFIX=""
+fi
+
 # zsh completion system (required before any script that calls compdef)
 fpath=("$HOME/.zsh/completions" $fpath)
+if [[ -n "${BREW_PREFIX}" && -d "${BREW_PREFIX}/share/zsh/site-functions" ]]; then
+  fpath=("${BREW_PREFIX}/share/zsh/site-functions" $fpath)
+fi
 autoload -Uz compinit
 compinit -d "$HOME/.zcompdump"
 
@@ -50,12 +60,6 @@ setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_FIND_NO_DUPS
 setopt HIST_REDUCE_BLANKS
 setopt EXTENDED_HISTORY
-
-if command -v brew >/dev/null 2>&1; then
-  BREW_PREFIX="$(brew --prefix)"
-else
-  BREW_PREFIX=""
-fi
 
 # --- fzf: Ctrl+R fuzzy history + completions ---
 if [[ -n "${BREW_PREFIX}" && -f "$BREW_PREFIX/opt/fzf/shell/key-bindings.zsh" ]]; then
