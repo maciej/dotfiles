@@ -46,7 +46,10 @@
   "buffer_font_size": 15,
   "theme": {
     "mode": "system",
-    "light": "One Light",
-    "dark": "One Dark"
+    "light": "Catppuccin Latte",
+    "dark": "Catppuccin Macchiato"
+  },
+  "auto_install_extensions": {
+    "catppuccin": true
   }
 }
