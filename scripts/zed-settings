@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-LOCAL_ONLY_KEYS = {"ssh_connections"}
+LOCAL_ONLY_KEYS = {"ssh_connections", "telemetry"}
 EXIT_DIFF = 1
 EXIT_CONFLICT = 2
 
@@ -240,6 +240,9 @@ def local_payload_from_live(data: dict[str, Any]) -> dict[str, Any]:
     ssh_connections = data.get("ssh_connections")
     if ssh_connections:
         payload["ssh_connections"] = ssh_connections
+    telemetry = data.get("telemetry")
+    if telemetry:
+        payload["telemetry"] = telemetry
     return payload
 
 
