@@ -55,8 +55,10 @@ parse_args() {
 BREW_PACKAGES=(
   tmux
   fish
+  bat
   helix
   git
+  git-delta
   fzf
   ripgrep
   zoxide
@@ -71,6 +73,7 @@ BREW_PACKAGES=(
 
 # shellcheck disable=SC3030
 APT_PACKAGES=(
+  bat
   curl
   fish
   fzf
@@ -184,6 +187,68 @@ install_apt_packages() {
 
   log "Installing missing apt packages: ${missing[*]}"
   sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
+}
+
+install_git_delta_linux() {
+  local apt_status arch deb_arch download_url latest_url tag tmp_dir version
+
+  apt_status="$(dpkg-query -W -f='${Status}' git-delta 2>/dev/null || true)"
+  if [[ "${apt_status}" == "install ok installed" ]] || command -v delta >/dev/null 2>&1; then
+    log "git-delta already installed"
+    return
+  fi
+
+  if apt-cache show git-delta >/dev/null 2>&1; then
+    log "Installing git-delta from apt repositories"
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y git-delta
+    return
+  fi
+
+  arch="$(dpkg --print-architecture 2>/dev/null || true)"
+  case "${arch}" in
+    amd64)
+      deb_arch="amd64"
+      ;;
+    arm64)
+      deb_arch="arm64"
+      ;;
+    armhf)
+      deb_arch="armhf"
+      ;;
+    i386)
+      deb_arch="i386"
+      ;;
+    *)
+      log "No git-delta .deb asset for architecture ${arch:-unknown}; skipping git-delta installation"
+      return
+      ;;
+  esac
+
+  command -v curl >/dev/null 2>&1 || {
+    log "git-delta installer requires curl"
+    return 1
+  }
+
+  latest_url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/dandavison/delta/releases/latest)"
+  tag="${latest_url##*/}"
+  if [[ -z "${tag}" || "${tag}" == "latest" ]]; then
+    log "Could not determine latest git-delta release tag"
+    return 1
+  fi
+
+  version="${tag#v}"
+  download_url="https://github.com/dandavison/delta/releases/download/${tag}/git-delta_${version}_${deb_arch}.deb"
+  tmp_dir="$(mktemp -d)"
+
+  if ! curl -fsSL "${download_url}" -o "${tmp_dir}/git-delta.deb"; then
+    rm -rf "${tmp_dir}"
+    log "Could not download git-delta release package for ${deb_arch}"
+    return 1
+  fi
+
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${tmp_dir}/git-delta.deb"
+  rm -rf "${tmp_dir}"
+  log "Installed git-delta from upstream .deb release"
 }
 
 install_uv_linux() {
@@ -440,6 +505,27 @@ sync_zed_settings() {
   return "${status}"
 }
 
+rebuild_bat_cache() {
+  local bat_cmd
+
+  if command -v bat >/dev/null 2>&1; then
+    bat_cmd="bat"
+  elif command -v batcat >/dev/null 2>&1; then
+    bat_cmd="batcat"
+  else
+    log "bat is not installed; skipping bat cache rebuild"
+    return
+  fi
+
+  if [[ ! -d "${HOME}/.config/bat/themes" ]]; then
+    log "No custom bat themes found; skipping bat cache rebuild"
+    return
+  fi
+
+  log "Rebuilding bat syntax/theme cache"
+  "${bat_cmd}" cache --build
+}
+
 main() {
   local os
   os="$(uname -s 2>/dev/null || true)"
@@ -451,6 +537,7 @@ main() {
     remove_legacy_ghostty_config_macos
   elif is_debian_apt_host; then
     install_apt_packages
+    install_git_delta_linux
     install_helix_linux
     install_uv_linux
   else
@@ -458,6 +545,7 @@ main() {
   fi
 
   link_dotfiles
+  rebuild_bat_cache
   if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
     sync_zed_settings
   else
