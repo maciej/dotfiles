@@ -44,8 +44,8 @@ if [[ -n "${SSH_TTY-}" || -n "${SSH_CONNECTION-}" || -n "${SSH_CLIENT-}" ]]; the
   fi
 else
   if command -v zed >/dev/null 2>&1; then
-    export EDITOR="zed --wait"
-    export VISUAL="zed --wait"
+    export EDITOR="$HOME/.local/bin/wait-zed"
+    export VISUAL="$HOME/.local/bin/wait-zed"
   elif command -v hx >/dev/null 2>&1; then
     export EDITOR=hx
     export VISUAL=hx

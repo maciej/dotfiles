@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+
+if zed_bin="$(command -v zed 2>/dev/null)"; then
+  :
+elif [ -x /opt/homebrew/bin/zed ]; then
+  zed_bin=/opt/homebrew/bin/zed
+elif [ -x /Applications/Zed.app/Contents/MacOS/cli ]; then
+  zed_bin=/Applications/Zed.app/Contents/MacOS/cli
+else
+  echo "wait-zed: zed not found" >&2
+  exit 127
+fi
+
+exec "$zed_bin" --wait "$@"

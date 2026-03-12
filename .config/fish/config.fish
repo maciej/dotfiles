@@ -36,8 +36,8 @@ if test $in_ssh -eq 1
     end
 else
     if command -q zed
-        set -gx EDITOR "zed --wait"
-        set -gx VISUAL "zed --wait"
+        set -gx EDITOR "$HOME/.local/bin/wait-zed"
+        set -gx VISUAL "$HOME/.local/bin/wait-zed"
     else if command -q hx
         set -gx EDITOR hx
         set -gx VISUAL hx
@@ -95,3 +95,7 @@ end
 if test -f "$HOME/.config/fish/config.local.fish"
     source "$HOME/.config/fish/config.local.fish"
 end
+
+# bun
+set --export BUN_INSTALL "$HOME/.bun"
+set --export PATH $BUN_INSTALL/bin $PATH
