@@ -69,6 +69,7 @@ BREW_PACKAGES=(
   sqlite
   stow
   uv
+  font-jetbrains-mono
 )
 
 # shellcheck disable=SC3030
