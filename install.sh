@@ -69,7 +69,6 @@ BREW_PACKAGES=(
   sqlite
   stow
   uv
-  font-jetbrains-mono
 )
 
 # shellcheck disable=SC3030
@@ -93,6 +92,7 @@ APT_PACKAGES=(
 
 # Install non-preview cask apps
 BREW_CASKS=(
+  font-jetbrains-mono
   zed
 )
 
