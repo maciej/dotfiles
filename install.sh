@@ -65,6 +65,7 @@ BREW_PACKAGES=(
   gh
   bash
   jq
+  kitty
   python
   sqlite
   stow
@@ -80,6 +81,7 @@ APT_PACKAGES=(
   gh
   git
   jq
+  kitty
   python3
   ripgrep
   sqlite3
