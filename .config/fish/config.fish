@@ -52,7 +52,10 @@ set -x LC_ALL en_US.UTF-8
 set -x LC_TIME pl_PL.UTF-8
 
 if test (uname -s) = Darwin
-    fish_add_path "/Applications/IntelliJ IDEA.app/Contents/MacOS"
+    set -l intellij_bin "/Applications/IntelliJ IDEA.app/Contents/MacOS"
+    if test -d "$intellij_bin"
+        fish_add_path "$intellij_bin"
+    end
 end
 
 if test -f "$HOME/.config/sops/age/keys.txt"
