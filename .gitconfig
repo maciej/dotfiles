@@ -24,7 +24,7 @@
 	precomposeunicode = true
 	editor = zed --wait
 	filemode = false
-	fsmonitor = true
+	fsmonitor = false
 	untrackedCache = true
 	pager = delta
 [credential]
