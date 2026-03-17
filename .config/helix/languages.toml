@@ -14,3 +14,11 @@ language-servers = [
   { name = "ruff", only-features = ["diagnostics", "code-action"] },
   "ty",
 ]
+
+[language-server.gopls.config]
+gofumpt = true
+
+[[language]]
+name = "go"
+auto-format = true
+language-servers = ["gopls"]
