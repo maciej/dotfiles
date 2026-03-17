@@ -1,0 +1,16 @@
+[language-server.ruff]
+command = "ruff"
+args = ["server"]
+
+[language-server.ty]
+command = "ty"
+args = ["server"]
+
+[[language]]
+name = "python"
+auto-format = true
+formatter = { command = "ruff", args = ["format", "--quiet", "--stdin-filename", "%{buffer_name}", "-"] }
+language-servers = [
+  { name = "ruff", only-features = ["diagnostics", "code-action"] },
+  "ty",
+]

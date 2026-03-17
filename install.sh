@@ -98,6 +98,11 @@ BREW_CASKS=(
   zed
 )
 
+UV_TOOL_PACKAGES=(
+  ruff
+  ty
+)
+
 bootstrap() {
   case "${SCRIPT_SOURCE}" in
     "")
@@ -372,6 +377,38 @@ install_helix_linux() {
   fi
 }
 
+install_uv_tools() {
+  local installed=false
+  local tool
+  local tool_list
+
+  if ! command -v uv >/dev/null 2>&1; then
+    log "uv is not installed; skipping uv tool installation"
+    return 0
+  fi
+
+  tool_list="$(uv tool list 2>/dev/null || true)"
+
+  for tool in "${UV_TOOL_PACKAGES[@]}"; do
+    if grep -Eq "^${tool} v" <<<"${tool_list}"; then
+      installed=true
+      if [[ "${UPGRADE}" == "true" ]]; then
+        log "Upgrading uv tool: ${tool}"
+        uv tool upgrade "${tool}"
+      else
+        log "Already installed uv tool: ${tool}"
+      fi
+    else
+      log "Installing uv tool: ${tool}"
+      uv tool install "${tool}@latest"
+    fi
+  done
+
+  if [[ "${installed}" == "false" && "${UPGRADE}" != "true" ]]; then
+    log "Installed requested uv tools"
+  fi
+}
+
 install_brew_packages() {
   local installed missing pkg
   installed=$'\n'"$(brew list --versions "${BREW_PACKAGES[@]}" 2>/dev/null || true)"$'\n'
@@ -548,6 +585,8 @@ main() {
   else
     log "Unsupported package manager on host (${os:-unknown}); skipping package installation"
   fi
+
+  install_uv_tools
 
   link_dotfiles
   rebuild_bat_cache
