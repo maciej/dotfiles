@@ -2,3 +2,6 @@ theme = "catppuccin_macchiato"
 
 [editor.soft-wrap]
 enable = true
+
+[keys.insert]
+C-space = "completion"
