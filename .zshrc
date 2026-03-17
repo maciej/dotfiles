@@ -30,6 +30,9 @@ fpath=("$HOME/.zsh/completions" $fpath)
 if [[ -n "${BREW_PREFIX}" && -d "${BREW_PREFIX}/share/zsh/site-functions" ]]; then
   fpath=("${BREW_PREFIX}/share/zsh/site-functions" $fpath)
 fi
+if command -v docker >/dev/null 2>&1 && [[ -d "$HOME/.docker/completions" ]]; then
+  fpath=("$HOME/.docker/completions" $fpath)
+fi
 autoload -Uz compinit
 compinit -d "$HOME/.zcompdump"
 
