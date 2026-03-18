@@ -8,12 +8,12 @@ path_prepend() {
   fi
 }
 
-path_prepend "$HOME/go/bin"
-path_prepend "$HOME/.local/bin"
-path_prepend "/opt/homebrew/bin"
-path_prepend "/opt/homebrew/sbin"
-path_prepend "/opt/homebrew/opt/postgresql/bin"
 path_prepend "/Applications/IntelliJ IDEA.app/Contents/MacOS"
+path_prepend "$HOME/go/bin"
+path_prepend "/opt/homebrew/opt/postgresql/bin"
+path_prepend "/opt/homebrew/sbin"
+path_prepend "/opt/homebrew/bin"
+path_prepend "$HOME/.local/bin"
 
 export PATH
 

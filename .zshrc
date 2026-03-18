@@ -1,9 +1,3 @@
-# Load shared PATH setup.
-if [[ -f "$HOME/.shell_paths" ]]; then
-  # shellcheck source=/dev/null
-  . "$HOME/.shell_paths"
-fi
-
 # Aliases
 alias ls='ls -G'
 alias ll='ls -lahG'
