@@ -1,21 +1,26 @@
-# Minimal PATH for ALL zsh sessions (incl. non-interactive SSH command mode).
-path_prepend() {
-  if [[ -d "$1" ]]; then
-    case ":$PATH:" in
-      *":$1:"*) ;;
-      *) PATH="$1:$PATH" ;;
-    esac
-  fi
+# Keep preferred user/Homebrew bins ahead of macOS system paths.
+typeset -gU path PATH
+
+ensure_preferred_path_order() {
+  local dir
+  local -a preferred_path
+
+  preferred_path=()
+  for dir in \
+    "$HOME/.local/bin" \
+    "/opt/homebrew/bin" \
+    "/opt/homebrew/sbin" \
+    "/opt/homebrew/opt/postgresql/bin" \
+    "$HOME/go/bin"
+  do
+    [[ -d "$dir" ]] && preferred_path+=("$dir")
+  done
+
+  path=($preferred_path $path)
+  export PATH
 }
 
-path_prepend "/Applications/IntelliJ IDEA.app/Contents/MacOS"
-path_prepend "$HOME/go/bin"
-path_prepend "/opt/homebrew/opt/postgresql/bin"
-path_prepend "/opt/homebrew/sbin"
-path_prepend "/opt/homebrew/bin"
-path_prepend "$HOME/.local/bin"
-
-export PATH
+ensure_preferred_path_order
 
 # Optional SOPS key path.
 if [[ -f "$HOME/.config/sops/age/keys.txt" ]]; then
@@ -31,6 +36,8 @@ fi
 if [[ -f "$HOME/.local/share/cloudflare-warp-certs/config.sh" ]]; then
   . "$HOME/.local/share/cloudflare-warp-certs/config.sh"
 fi
+
+ensure_preferred_path_order
 
 # Set editor based on session type:
 # - Local: prefer zed --wait

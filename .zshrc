@@ -142,6 +142,12 @@ if [[ -n "${BREW_PREFIX}" && -f "$BREW_PREFIX/share/zsh-syntax-highlighting/zsh-
   source "$BREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 fi
 
+JETBRAINS_APP_PATH="/Applications/IntelliJ IDEA.app/Contents/MacOS"
+if [[ -d "$JETBRAINS_APP_PATH" ]]; then
+  path=(${path:#$JETBRAINS_APP_PATH} "$JETBRAINS_APP_PATH")
+  export PATH
+fi
+
 # Local, machine-specific overrides.
 if [[ -f "$HOME/.zshrc.local" ]]; then
   # shellcheck source=/dev/null
