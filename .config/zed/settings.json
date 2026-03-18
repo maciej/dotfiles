@@ -1,4 +1,9 @@
 {
+  "soft_wrap": "preferred_line_length",
+  "preferred_line_length": 120,
+  "wrap_guides": [
+    120
+  ],
   "edit_predictions": {
     "mode": "subtle",
     "copilot": {
@@ -57,7 +62,7 @@
     "Menlo",
     ".ZedMono"
   ],
-  "buffer_font_size": 13,
+  "buffer_font_size": 13.0,
   "buffer_line_height": "comfortable",
   "theme": {
     "mode": "system",
