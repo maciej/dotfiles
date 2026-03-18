@@ -8,6 +8,11 @@ SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
 UPGRADE=false
 SYNC_ZED_SETTINGS=false
 
+# Paths that used to be stowed into $HOME but are no longer present in the repo.
+LEGACY_STOW_PATHS=(
+  "${HOME}/.shell_paths"
+)
+
 log() {
   printf "[dotfiles] %s\n" "$1"
 }
@@ -491,6 +496,65 @@ remove_legacy_ghostty_config_macos() {
   fi
 }
 
+validate_legacy_stow_targets() {
+  local path rel_path repo_path
+
+  for path in "${LEGACY_STOW_PATHS[@]}"; do
+    if [[ "${path}" != "${HOME}/"* ]]; then
+      log "Legacy stow target must be an absolute path under HOME: ${path}"
+      return 1
+    fi
+
+    rel_path="${path#"${HOME}/"}"
+    repo_path="${DOTFILES_DIR}/${rel_path}"
+    if [[ -e "${repo_path}" ]]; then
+      log "Legacy stow target is still present in the repo: ${path}"
+      log "Remove it from LEGACY_STOW_PATHS or delete the repo path before rerunning install.sh."
+      return 1
+    fi
+  done
+}
+
+remove_legacy_stow_targets() {
+  local path link_target resolved_dir resolved_target
+
+  for path in "${LEGACY_STOW_PATHS[@]}"; do
+    if [[ ! -L "${path}" ]]; then
+      if [[ -e "${path}" ]]; then
+        log "Legacy path exists but is not a symlink; leaving it in place: ${path}"
+      else
+        log "No legacy stow target found: ${path}"
+      fi
+      continue
+    fi
+
+    link_target="$(readlink "${path}")"
+    if [[ "${link_target}" == /* ]]; then
+      resolved_target="${link_target}"
+    else
+      resolved_dir="$(
+        cd "$(dirname "${path}")" \
+          && cd "$(dirname "${link_target}")" 2>/dev/null \
+          && pwd -P
+      )" || {
+        log "Could not resolve legacy symlink target; leaving it in place: ${path}"
+        continue
+      }
+      resolved_target="${resolved_dir}/$(basename "${link_target}")"
+    fi
+
+    case "${resolved_target}" in
+      "${DOTFILES_DIR}"|"${DOTFILES_DIR}"/*)
+        rm -f "${path}"
+        log "Removed legacy stow target: ${path}"
+        ;;
+      *)
+        log "Legacy path points outside this dotfiles repo; leaving it in place: ${path}"
+        ;;
+    esac
+  done
+}
+
 link_dotfiles() {
   if command -v stow >/dev/null 2>&1; then
     local restow="${DOTFILES_STOW_RESTOW:-false}"
@@ -588,6 +652,8 @@ main() {
 
   install_uv_tools
 
+  validate_legacy_stow_targets
+  remove_legacy_stow_targets
   link_dotfiles
   rebuild_bat_cache
   if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
