@@ -8,4 +8,4 @@ deploy.sh
 AGENTS.md
 CLAUDE.md
 .config/zed/settings.json
-scripts
+^/scripts$
