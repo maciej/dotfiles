@@ -65,7 +65,6 @@ BREW_PACKAGES=(
   gh
   bash
   jq
-  kitty
   python
   sqlite
   stow
@@ -94,6 +93,7 @@ APT_PACKAGES=(
 
 # Install non-preview cask apps
 BREW_CASKS=(
+  kitty
   font-jetbrains-mono
   zed
 )
