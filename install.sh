@@ -177,6 +177,12 @@ is_debian_apt_host() {
   grep -Eqi '^(ID|ID_LIKE)=.*(debian|ubuntu)' /etc/os-release
 }
 
+is_raspbian_host() {
+  [[ -r /etc/os-release ]] || return 1
+
+  grep -Eq '^ID=raspbian$' /etc/os-release
+}
+
 install_apt_packages() {
   local missing pkg status
   missing=()
@@ -299,19 +305,53 @@ install_uv_linux() {
   fi
 }
 
+install_helix_linux_via_snap() {
+  local helix_bin="${HOME}/.local/bin/hx"
+  local installed=false
+
+  if snap list helix >/dev/null 2>&1; then
+    installed=true
+  fi
+
+  if ! command -v snap >/dev/null 2>&1; then
+    log "Installing snapd from apt repositories for Helix armhf support"
+    sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y snapd
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    sudo systemctl enable --now snapd.socket
+  fi
+
+  if [[ ! -e /snap && -d /var/lib/snapd/snap ]]; then
+    sudo ln -s /var/lib/snapd/snap /snap
+  fi
+
+  if ! snap list snapd >/dev/null 2>&1; then
+    log "Installing snapd snap per Snapcraft Raspbian instructions"
+    sudo snap install snapd
+  fi
+
+  if [[ "${installed}" == "true" ]]; then
+    if [[ "${UPGRADE}" == "true" ]]; then
+      log "Refreshing Helix from Snapcraft"
+      sudo snap refresh helix
+    else
+      log "helix already installed"
+    fi
+  else
+    log "Installing Helix from Snapcraft"
+    sudo snap install helix --classic
+  fi
+
+  mkdir -p "${HOME}/.local/bin"
+  ln -sfn /snap/bin/hx "${helix_bin}"
+  log "Linked Helix snap launcher into ${helix_bin}"
+}
+
 install_helix_linux() {
   local helix_bin="${HOME}/.local/bin/hx"
   local arch asset_pattern asset_url extracted_dir tarball tmp_dir
   local installed=false
-
-  if command -v hx >/dev/null 2>&1 || [[ -x "${helix_bin}" ]]; then
-    installed=true
-  fi
-
-  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
-    log "helix already installed"
-    return
-  fi
 
   arch="$(uname -m 2>/dev/null || true)"
   case "${arch}" in
@@ -322,7 +362,11 @@ install_helix_linux() {
       asset_pattern="x86_64-linux.tar.xz"
       ;;
     armv6l|armv7l|armhf)
-      log "No official Helix Linux release is available for ${arch}; skipping Helix installation"
+      if is_raspbian_host; then
+        install_helix_linux_via_snap
+      else
+        log "No official Helix Linux release is available for ${arch}; skipping Helix installation"
+      fi
       return
       ;;
     *)
@@ -330,6 +374,15 @@ install_helix_linux() {
       return
       ;;
   esac
+
+  if command -v hx >/dev/null 2>&1 || [[ -x "${helix_bin}" ]]; then
+    installed=true
+  fi
+
+  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
+    log "helix already installed"
+    return
+  fi
 
   command -v curl >/dev/null 2>&1 || {
     log "Helix installer requires curl"
