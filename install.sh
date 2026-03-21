@@ -17,6 +17,16 @@ log() {
   printf "[dotfiles] %s\n" "$1"
 }
 
+ensure_user_local_bin_on_path() {
+  case ":${PATH}:" in
+    *":${HOME}/.local/bin:"*)
+      ;;
+    *)
+      export PATH="${HOME}/.local/bin:${PATH}"
+      ;;
+  esac
+}
+
 print_help() {
   cat <<EOF
 Usage: install.sh [--upgrade] [--sync-zed-settings] [--help]
@@ -276,6 +286,8 @@ install_uv_linux() {
   local uv_bin="${HOME}/.local/bin/uv"
   local installed=false
 
+  ensure_user_local_bin_on_path
+
   if command -v uv >/dev/null 2>&1 || [[ -x "${uv_bin}" ]]; then
     installed=true
   fi
@@ -303,6 +315,24 @@ install_uv_linux() {
     log "uv installer requires curl or wget"
     return 1
   fi
+
+  ensure_user_local_bin_on_path
+}
+
+resolve_uv_bin() {
+  local uv_bin="${HOME}/.local/bin/uv"
+
+  if command -v uv >/dev/null 2>&1; then
+    command -v uv
+    return 0
+  fi
+
+  if [[ -x "${uv_bin}" ]]; then
+    printf '%s\n' "${uv_bin}"
+    return 0
+  fi
+
+  return 1
 }
 
 install_helix_linux_via_snap() {
@@ -439,26 +469,29 @@ install_uv_tools() {
   local installed=false
   local tool
   local tool_list
+  local uv_bin
 
-  if ! command -v uv >/dev/null 2>&1; then
+  ensure_user_local_bin_on_path
+
+  if ! uv_bin="$(resolve_uv_bin)"; then
     log "uv is not installed; skipping uv tool installation"
     return 0
   fi
 
-  tool_list="$(uv tool list 2>/dev/null || true)"
+  tool_list="$("${uv_bin}" tool list 2>/dev/null || true)"
 
   for tool in "${UV_TOOL_PACKAGES[@]}"; do
     if grep -Eq "^${tool} v" <<<"${tool_list}"; then
       installed=true
       if [[ "${UPGRADE}" == "true" ]]; then
         log "Upgrading uv tool: ${tool}"
-        uv tool upgrade "${tool}"
+        "${uv_bin}" tool upgrade "${tool}"
       else
         log "Already installed uv tool: ${tool}"
       fi
     else
       log "Installing uv tool: ${tool}"
-      uv tool install "${tool}@latest"
+      "${uv_bin}" tool install "${tool}@latest"
     fi
   done
 
@@ -688,6 +721,8 @@ rebuild_bat_cache() {
 main() {
   local os
   os="$(uname -s 2>/dev/null || true)"
+
+  ensure_user_local_bin_on_path
 
   if [[ "${os}" == "Darwin" ]]; then
     ensure_brew
