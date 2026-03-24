@@ -4,12 +4,20 @@ alias ll='ls -lahG'
 
 # Keep ANSI colors when paging with less.
 if [[ -z "${LESS-}" ]]; then
-  export LESS='-R -F -X'
+  export LESS='-R -F'
 else
-  [[ " ${LESS} " != *" -R "* ]] && LESS="${LESS} -R"
-  [[ " ${LESS} " != *" -F "* ]] && LESS="${LESS} -F"
-  [[ " ${LESS} " != *" -X "* ]] && LESS="${LESS} -X"
-  export LESS
+  typeset -a less_flags filtered_flags
+  less_flags=(${=LESS})
+  filtered_flags=()
+  for flag in "${less_flags[@]}"; do
+    case "$flag" in
+      -X|--mouse|--wheel-lines=*) ;;
+      *) filtered_flags+=("$flag") ;;
+    esac
+  done
+  [[ " ${filtered_flags[*]} " != *" -R "* ]] && filtered_flags+=(-R)
+  [[ " ${filtered_flags[*]} " != *" -F "* ]] && filtered_flags+=(-F)
+  export LESS="${(j: :)filtered_flags}"
 fi
 
 # Detect Homebrew prefix when available (macOS or Linuxbrew); empty elsewhere.

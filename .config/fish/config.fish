@@ -3,15 +3,23 @@ set -gx DOCKER_CLI_HINTS false
 
 # Keep ANSI colors when paging with less.
 if not set -q LESS
-    set -gx LESS "-R -F -X"
+    set -gx LESS "-R -F"
 else
-    set -l less_flags "$LESS"
-    for flag in -R -F -X
-        if not string match -rq -- '(^|\s)'"$flag"'(\s|$)' $less_flags
-            set less_flags "$less_flags $flag"
+    set -l less_flags
+    for flag in (string split ' ' -- $LESS)
+        switch $flag
+            case '' -X --mouse --wheel-lines='*'
+                continue
+            case '*'
+                set less_flags $less_flags $flag
         end
     end
-    set -gx LESS "$less_flags"
+    for flag in -R -F
+        if not contains -- $flag $less_flags
+            set less_flags $less_flags $flag
+        end
+    end
+    set -gx LESS (string join ' ' -- $less_flags)
 end
 
 fish_add_path "$HOME/go/bin"
