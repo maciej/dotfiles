@@ -166,6 +166,41 @@ def canonical_json(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
+def load_optional_json(path: Path, *, allow_comments: bool) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    return load_json(path, allow_comments=allow_comments)
+
+
+def diff_label(path: Path, *, exists: bool, suffix: str) -> str:
+    if not exists:
+        return "/dev/null"
+    return f"{path} ({suffix})"
+
+
+def json_diff(
+    before: dict[str, Any] | None,
+    after: dict[str, Any] | None,
+    *,
+    path: Path,
+) -> str:
+    before_lines = canonical_json(before).splitlines(keepends=True) if before is not None else []
+    after_lines = canonical_json(after).splitlines(keepends=True) if after is not None else []
+    return "".join(
+        difflib.unified_diff(
+            before_lines,
+            after_lines,
+            fromfile=diff_label(path, exists=before is not None, suffix="current"),
+            tofile=diff_label(path, exists=after is not None, suffix="new"),
+        )
+    )
+
+
+def print_diff(title: str, diff_text: str) -> None:
+    print(f"{title}:")
+    print(diff_text, end="")
+
+
 def default_paths(repo_root: Path) -> tuple[Path, Path, Path]:
     xdg_config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     zed_dir = xdg_config_home / "zed"
@@ -212,8 +247,9 @@ def live_is_newer_than_sources(
 
     if live_mtime > max(source_mtimes):
         raise ConflictError(
-            f"{live_path} is newer than the source files; "
-            "run `pull` first or use `push --force`"
+            f"refusing to overwrite newer live settings at {live_path}; "
+            "run `./scripts/zed-settings pull` first or use `push --force` "
+            "to make dotfiles win"
         )
 
 
@@ -230,8 +266,8 @@ def source_is_older_than_targets(
 
     target_list = ", ".join(str(path) for path in newer_targets)
     raise ConflictError(
-        f"{target_list} is newer than {source_path}; "
-        "use `pull --force` to overwrite"
+        f"refusing to overwrite newer repo/local settings at {target_list} "
+        f"with {source_path}; use `pull --force` to make the live file win"
     )
 
 
@@ -263,11 +299,40 @@ def load_repo_settings(shared_path: Path, local_path: Path) -> dict[str, Any]:
     return merged
 
 
-def pull(shared_path: Path, local_path: Path, live_path: Path, *, force: bool) -> None:
-    source_is_older_than_targets(live_path, [shared_path, local_path], force=force)
+def pull(
+    shared_path: Path,
+    local_path: Path,
+    live_path: Path,
+    *,
+    force: bool,
+    quiet: bool,
+) -> None:
     live = load_json(live_path, allow_comments=True)
     shared = shared_payload(live)
     local = local_payload_from_live(live)
+    shared_diff = json_diff(
+        load_optional_json(shared_path, allow_comments=False),
+        shared,
+        path=shared_path,
+    )
+    local_diff = json_diff(
+        load_optional_json(local_path, allow_comments=False),
+        local or None,
+        path=local_path,
+    )
+
+    if not quiet:
+        if shared_diff:
+            print_diff(f"Pulling shared diff into dotfiles at {shared_path}", shared_diff)
+        if local_diff:
+            print_diff(f"Pulling local-only diff into {local_path}", local_diff)
+        if not shared_diff and not local_diff:
+            print("Dotfiles and local-only Zed settings already match the live configuration.")
+
+    if not shared_diff and not local_diff:
+        return
+
+    source_is_older_than_targets(live_path, [shared_path, local_path], force=force)
 
     write_json_atomic(shared_path, shared)
     if local:
@@ -276,8 +341,33 @@ def pull(shared_path: Path, local_path: Path, live_path: Path, *, force: bool) -
         local_path.unlink()
 
 
-def push(shared_path: Path, local_path: Path, live_path: Path, *, force: bool) -> None:
+def push(
+    shared_path: Path,
+    local_path: Path,
+    live_path: Path,
+    *,
+    force: bool,
+    quiet: bool,
+) -> None:
     merged = load_repo_settings(shared_path, local_path)
+    live_diff = json_diff(
+        load_optional_json(live_path, allow_comments=True),
+        merged,
+        path=live_path,
+    )
+
+    if not quiet:
+        if live_diff:
+            print_diff(
+                f"Pushing diff to system configuration at {live_path}",
+                live_diff,
+            )
+        else:
+            print("System configuration already matches the repo and local Zed settings.")
+
+    if not live_diff:
+        return
+
     live_is_newer_than_sources(live_path, [shared_path, local_path], force=force)
 
     write_json_atomic(live_path, merged)
@@ -328,6 +418,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Overwrite the shared/local files even if they are newer than the live settings.",
     )
+    pull_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress the default diff output before writing files.",
+    )
     push_parser = subparsers.add_parser(
         "push", help="Merge the shared and local files into the live settings."
     )
@@ -335,6 +430,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--force",
         action="store_true",
         help="Overwrite the live settings even if they are newer than the repo inputs.",
+    )
+    push_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress the default diff output before writing files.",
     )
     subparsers.add_parser(
         "diff",
@@ -350,9 +450,9 @@ def main() -> int:
 
     try:
         if args.command == "pull":
-            pull(shared_path, local_path, live_path, force=args.force)
+            pull(shared_path, local_path, live_path, force=args.force, quiet=args.quiet)
         elif args.command == "push":
-            push(shared_path, local_path, live_path, force=args.force)
+            push(shared_path, local_path, live_path, force=args.force, quiet=args.quiet)
         elif args.command == "diff":
             return EXIT_DIFF if diff(shared_path, local_path, live_path) else 0
         else:

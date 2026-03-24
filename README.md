@@ -53,8 +53,10 @@ cd ~/.dotfiles
 git diff
 ```
 
-That command updates the tracked shared settings file, writes `ssh_connections` into `~/.config/zed/settings.local.json`, and removes `ssh_connections` from the tracked repo copy.
+That command updates the tracked shared settings file, writes local-only keys like `ssh_connections` and `telemetry` into `~/.config/zed/settings.local.json`, and removes those keys from the tracked repo copy. `pull` now prints the shared diff it is pulling into the repo and any local-only diff it is writing alongside it.
 
 `./scripts/zed-settings diff` compares the shared repo settings against the shared portion of the live `~/.config/zed/settings.json` using normalized JSON, so comment changes, formatting differences, key ordering, and local-only keys like `ssh_connections` do not add noise. It exits with status `1` when differences are present and prints a unified diff.
+
+`./scripts/zed-settings push` now prints the exact diff it is pushing into `~/.config/zed/settings.json` before it writes the merged file. `push` and `pull` also treat no-op runs as success even when mtimes differ, so a newer destination only blocks the command when content would actually change. Pass `--quiet` to either subcommand if you want the old silent behavior.
 
 Both `push` and `pull` refuse to overwrite a newer destination file by default: `push` will not replace a newer live `~/.config/zed/settings.json`, and `pull` will not replace newer tracked or local source files. Use `--force` only when you intentionally want the command’s source side to win.
