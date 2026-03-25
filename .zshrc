@@ -28,6 +28,23 @@ else
 fi
 
 # zsh completion system (required before any script that calls compdef)
+if command -v codex >/dev/null 2>&1; then
+  CODEX_COMPLETION_DIR="$HOME/.zsh/completions"
+  CODEX_COMPLETION_FILE="$CODEX_COMPLETION_DIR/_codex"
+
+  mkdir -p "$CODEX_COMPLETION_DIR"
+  if [[ ! -s "$CODEX_COMPLETION_FILE" || "$(command -v codex)" -nt "$CODEX_COMPLETION_FILE" ]]; then
+    codex_completion_tmp="$(mktemp "${TMPDIR:-/tmp}/codex-zsh-completion.XXXXXX")"
+    if codex completion zsh >| "$codex_completion_tmp"; then
+      mv "$codex_completion_tmp" "$CODEX_COMPLETION_FILE"
+    else
+      rm -f "$codex_completion_tmp"
+    fi
+  fi
+
+  unset CODEX_COMPLETION_DIR CODEX_COMPLETION_FILE codex_completion_tmp
+fi
+
 fpath=("$HOME/.zsh/completions" $fpath)
 if [[ -n "${BREW_PREFIX}" && -d "${BREW_PREFIX}/share/zsh/site-functions" ]]; then
   fpath=("${BREW_PREFIX}/share/zsh/site-functions" $fpath)
