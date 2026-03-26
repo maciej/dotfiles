@@ -110,6 +110,21 @@ bindkey -M emacs '^[^H' backward-kill-word
 bindkey -M viins '^[^?' backward-kill-word
 bindkey -M viins '^[^H' backward-kill-word
 
+# Make Option/Alt+Arrow move by word across terminals that either send Meta+b/f
+# or xterm-style modified arrow sequences.
+bindkey -M emacs '^[b' backward-word
+bindkey -M emacs '^[f' forward-word
+bindkey -M emacs '^[[1;3D' backward-word
+bindkey -M emacs '^[[1;3C' forward-word
+bindkey -M emacs '^[[1;9D' backward-word
+bindkey -M emacs '^[[1;9C' forward-word
+bindkey -M viins '^[b' backward-word
+bindkey -M viins '^[f' forward-word
+bindkey -M viins '^[[1;3D' backward-word
+bindkey -M viins '^[[1;3C' forward-word
+bindkey -M viins '^[[1;9D' backward-word
+bindkey -M viins '^[[1;9C' forward-word
+
 # --- Prompt (fast, fish-like, left-only) ---
 autoload -Uz vcs_info add-zsh-hook
 zstyle ':vcs_info:*' enable git
