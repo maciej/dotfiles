@@ -98,16 +98,6 @@ if test -f "$HOME/.local/share/cloudflare-warp-certs/config.fish"
     source "$HOME/.local/share/cloudflare-warp-certs/config.fish"
 end
 
-if status is-interactive
-    # Commands to run in interactive sessions can go here
-    if not set -q TMUX
-        and command -q tmux
-        and test -r /proc/device-tree/model
-        and string match -qi '*raspberry pi*' (cat /proc/device-tree/model)
-        exec tmux
-    end
-end
-
 # Local, machine-specific overrides.
 if test -f "$HOME/.config/fish/config.local.fish"
     source "$HOME/.config/fish/config.local.fish"
