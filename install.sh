@@ -80,6 +80,7 @@ BREW_PACKAGES=(
   gh
   bash
   jq
+  ncurses
   python
   sqlite
   stow
@@ -96,6 +97,7 @@ APT_PACKAGES=(
   git
   jq
   kitty
+  ncurses-bin
   python3
   ripgrep
   sqlite3
@@ -582,6 +584,110 @@ remove_legacy_ghostty_config_macos() {
   fi
 }
 
+resolve_infocmp_bin() {
+  local os brew_prefix
+  os="$(uname -s 2>/dev/null || true)"
+
+  if [[ "${os}" == "Darwin" ]]; then
+    for brew_prefix in /opt/homebrew /usr/local; do
+      if [[ -x "${brew_prefix}/opt/ncurses/bin/infocmp" ]]; then
+        printf '%s\n' "${brew_prefix}/opt/ncurses/bin/infocmp"
+        return 0
+      fi
+    done
+  fi
+
+  if command -v infocmp >/dev/null 2>&1; then
+    command -v infocmp
+    return 0
+  fi
+
+  return 1
+}
+
+resolve_tic_bin() {
+  local os brew_prefix
+  os="$(uname -s 2>/dev/null || true)"
+
+  if [[ "${os}" == "Darwin" ]]; then
+    for brew_prefix in /opt/homebrew /usr/local; do
+      if [[ -x "${brew_prefix}/opt/ncurses/bin/tic" ]]; then
+        printf '%s\n' "${brew_prefix}/opt/ncurses/bin/tic"
+        return 0
+      fi
+    done
+  fi
+
+  if command -v tic >/dev/null 2>&1; then
+    command -v tic
+    return 0
+  fi
+
+  return 1
+}
+
+find_ghostty_terminfo_file() {
+  local source_file="${DOTFILES_DIR}/terminfo/ghostty.terminfo"
+
+  if [[ -f "${source_file}" ]]; then
+    printf '%s\n' "${source_file}"
+    return 0
+  fi
+
+  return 1
+}
+
+install_ghostty_terminfo() {
+  local infocmp_bin tic_bin target_dir source_file source_dir
+
+  if ! tic_bin="$(resolve_tic_bin)"; then
+    log "tic is not installed; skipping Ghostty terminfo setup"
+    return 0
+  fi
+
+  target_dir="${HOME}/.terminfo"
+
+  if infocmp_bin="$(resolve_infocmp_bin)"; then
+    if "${infocmp_bin}" -x -A "${target_dir}" xterm-ghostty >/dev/null 2>&1; then
+      log "Ghostty terminfo already installed in ${target_dir}"
+      return 0
+    fi
+  fi
+
+  if ! source_file="$(find_ghostty_terminfo_file)"; then
+    if [[ -n "${infocmp_bin:-}" ]] && "${infocmp_bin}" -x xterm-ghostty >/dev/null 2>&1; then
+      mkdir -p "${target_dir}"
+      "${infocmp_bin}" -x xterm-ghostty | "${tic_bin}" -x -o "${target_dir}" -
+      log "Installed Ghostty terminfo from the active terminfo database"
+      return 0
+    fi
+
+    log "Could not find a Ghostty terminfo source locally; skipping Ghostty terminfo setup"
+    return 0
+  fi
+
+  mkdir -p "${target_dir}"
+
+  case "$(basename "${source_file}")" in
+    xterm-ghostty)
+      source_dir="$(dirname "$(dirname "${source_file}")")"
+      if [[ -z "${infocmp_bin:-}" ]]; then
+        if ! infocmp_bin="$(resolve_infocmp_bin)"; then
+          log "infocmp is not installed; skipping Ghostty terminfo setup"
+          return 0
+        fi
+      fi
+
+      "${infocmp_bin}" -x -A "${source_dir}" xterm-ghostty | "${tic_bin}" -x -o "${target_dir}" -
+      log "Installed Ghostty terminfo from ${source_file}"
+      ;;
+    *)
+      "${tic_bin}" -x -o "${target_dir}" "${source_file}"
+      log "Installed Ghostty terminfo from ${source_file}"
+      ;;
+  esac
+}
+
 validate_legacy_stow_targets() {
   local path rel_path repo_path
 
@@ -739,6 +845,7 @@ main() {
   fi
 
   install_uv_tools
+  install_ghostty_terminfo
 
   validate_legacy_stow_targets
   remove_legacy_stow_targets
