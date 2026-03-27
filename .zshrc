@@ -1,6 +1,57 @@
-# Aliases
-alias ls='ls -G'
-alias ll='ls -lahG'
+# Fish-like ls/ll behavior with automatic color support.
+_ensure_ls_opts() {
+  local opt
+
+  [[ -n "${__ls_base_command-}" ]] && return 0
+
+  typeset -g __ls_base_command="ls"
+  typeset -g __ls_color_opt=""
+  typeset -g __ls_indicators_opt=""
+
+  for opt in '--color=auto' '-G' '--color'; do
+    if command ls "$opt" / >/dev/null 2>&1; then
+      __ls_color_opt="$opt"
+      break
+    fi
+  done
+
+  if command ls -F / >/dev/null 2>&1; then
+    __ls_indicators_opt="-F"
+  fi
+}
+
+ls() {
+  local cmd color_opt indicators_opt
+  local -a args
+
+  _ensure_ls_opts
+
+  cmd="$__ls_base_command"
+  color_opt="$__ls_color_opt"
+  indicators_opt=""
+
+  if [[ -t 1 ]]; then
+    indicators_opt="$__ls_indicators_opt"
+  fi
+
+  args=()
+  [[ -n "$color_opt" ]] && args+=("$color_opt")
+  [[ -n "$indicators_opt" ]] && args+=("$indicators_opt")
+
+  if [[ -n "${CLICOLOR_FORCE-}" && ! -t 1 ]]; then
+    args=(${args:#"$color_opt"})
+  fi
+
+  if [[ "$TERM_PROGRAM" == "Apple_Terminal" ]]; then
+    CLICOLOR=1 command "$cmd" "${args[@]}" "$@"
+  else
+    command "$cmd" "${args[@]}" "$@"
+  fi
+}
+
+ll() {
+  ls -lh "$@"
+}
 
 # Keep ANSI colors when paging with less.
 if [[ -z "${LESS-}" ]]; then
@@ -189,6 +240,10 @@ if [[ -d "$JETBRAINS_APP_PATH" ]]; then
 fi
 
 # Local, machine-specific overrides.
+if [[ -o interactive ]]; then
+  alias cy='codex --yolo'
+fi
+
 if [[ -f "$HOME/.zshrc.local" ]]; then
   # shellcheck source=/dev/null
   source "$HOME/.zshrc.local"
