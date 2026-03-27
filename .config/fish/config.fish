@@ -27,6 +27,10 @@ fish_add_path /opt/homebrew/sbin
 fish_add_path /opt/homebrew/bin
 fish_add_path "$HOME/.local/bin"
 
+if command -q zoxide
+    zoxide init fish | source
+end
+
 set -l in_ssh 0
 if set -q SSH_TTY
     set in_ssh 1
