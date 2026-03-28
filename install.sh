@@ -627,10 +627,29 @@ resolve_tic_bin() {
 }
 
 find_ghostty_terminfo_file() {
-  local source_file="${DOTFILES_DIR}/terminfo/ghostty.terminfo"
+  local candidate
 
-  if [[ -f "${source_file}" ]]; then
-    printf '%s\n' "${source_file}"
+  for candidate in \
+    "/Applications/Ghostty.app/Contents/Resources/terminfo/78/xterm-ghostty" \
+    "${HOME}/Applications/Ghostty.app/Contents/Resources/terminfo/78/xterm-ghostty" \
+    "${DOTFILES_DIR}/terminfo/ghostty.terminfo"; do
+    if [[ -f "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+ghostty_terminfo_installed_in_dir() {
+  local target_dir="$1"
+
+  if [[ -f "${target_dir}/78/xterm-ghostty" || -f "${target_dir}/67/ghostty" ]]; then
+    return 0
+  fi
+
+  if [[ -d "${target_dir}" ]] && find "${target_dir}" -maxdepth 2 -type f \( -name 'xterm-ghostty' -o -name 'ghostty' \) -print -quit 2>/dev/null | grep -q .; then
     return 0
   fi
 
@@ -646,6 +665,11 @@ install_ghostty_terminfo() {
   fi
 
   target_dir="${HOME}/.terminfo"
+
+  if ghostty_terminfo_installed_in_dir "${target_dir}"; then
+    log "Ghostty terminfo already installed in ${target_dir}"
+    return 0
+  fi
 
   if infocmp_bin="$(resolve_infocmp_bin)"; then
     if "${infocmp_bin}" -x -A "${target_dir}" xterm-ghostty >/dev/null 2>&1; then
