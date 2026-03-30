@@ -1,5 +1,8 @@
 # AGENTS.md
 
+## Dotfiles
+- When searching this repo for files or directories, include dotfiles by default and use tools or flags that do not hide them.
+
 ## Dotfiles & Stow
 - This repo is Stow-managed. Only commit paths that should be symlinked into `$HOME` unless they are explicitly ignored.
 - If you add a repo-only path that should not be stowed into `$HOME` (for example `README` files, helper scripts, repo metadata, or top-level utility directories), add it to `.stow-local-ignore` in the same change.
