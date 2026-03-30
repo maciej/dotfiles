@@ -642,6 +642,52 @@ find_ghostty_terminfo_file() {
   return 1
 }
 
+sanitize_ghostty_terminfo_source() {
+  awk '
+    BEGIN {
+      header_done = 0
+      emit_alias = 0
+    }
+    !header_done && /^[[:space:]]*#/ {
+      print
+      next
+    }
+    !header_done && /^[[:space:]]*$/ {
+      print
+      next
+    }
+    !header_done {
+      header_done = 1
+      emit_alias = ($0 ~ /(^|\|)ghostty([|,])/)
+      print "xterm-ghostty,"
+      next
+    }
+    {
+      print
+    }
+    END {
+      if (header_done && emit_alias) {
+        print ""
+        print "ghostty,"
+        print "\tuse=xterm-ghostty,"
+      }
+    }
+  '
+}
+
+compile_ghostty_terminfo_from_infocmp() {
+  local infocmp_bin="$1"
+  local tic_bin="$2"
+  local target_dir="$3"
+  local source_dir="${4:-}"
+
+  if [[ -n "${source_dir}" ]]; then
+    "${infocmp_bin}" -x -A "${source_dir}" xterm-ghostty
+  else
+    "${infocmp_bin}" -x xterm-ghostty
+  fi | sanitize_ghostty_terminfo_source | "${tic_bin}" -x -o "${target_dir}" -
+}
+
 ghostty_terminfo_installed_in_dir() {
   local target_dir="$1"
 
@@ -681,7 +727,7 @@ install_ghostty_terminfo() {
   if ! source_file="$(find_ghostty_terminfo_file)"; then
     if [[ -n "${infocmp_bin:-}" ]] && "${infocmp_bin}" -x xterm-ghostty >/dev/null 2>&1; then
       mkdir -p "${target_dir}"
-      "${infocmp_bin}" -x xterm-ghostty | "${tic_bin}" -x -o "${target_dir}" -
+      compile_ghostty_terminfo_from_infocmp "${infocmp_bin}" "${tic_bin}" "${target_dir}"
       log "Installed Ghostty terminfo from the active terminfo database"
       return 0
     fi
@@ -702,7 +748,7 @@ install_ghostty_terminfo() {
         fi
       fi
 
-      "${infocmp_bin}" -x -A "${source_dir}" xterm-ghostty | "${tic_bin}" -x -o "${target_dir}" -
+      compile_ghostty_terminfo_from_infocmp "${infocmp_bin}" "${tic_bin}" "${target_dir}" "${source_dir}"
       log "Installed Ghostty terminfo from ${source_file}"
       ;;
     *)
