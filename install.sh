@@ -17,6 +17,139 @@ log() {
   printf "[dotfiles] %s\n" "$1"
 }
 
+log_err() {
+  printf "[dotfiles] %s\n" "$1" >&2
+}
+
+readonly MIB=1048576
+readonly HELIX_TEMP_MIN_FREE_BYTES=$((512 * MIB))
+readonly GIT_DELTA_TEMP_MIN_FREE_BYTES=$((64 * MIB))
+
+TEMP_DIR_CLEANUP_ITEMS=()
+
+cleanup_temp_dirs() {
+  local dir
+
+  for dir in "${TEMP_DIR_CLEANUP_ITEMS[@]}"; do
+    [[ -n "${dir}" ]] || continue
+    rm -rf "${dir}"
+  done
+}
+
+register_temp_cleanup_trap() {
+  trap cleanup_temp_dirs EXIT
+}
+
+register_temp_dir_for_cleanup() {
+  local dir="$1"
+
+  TEMP_DIR_CLEANUP_ITEMS+=("${dir}")
+  register_temp_cleanup_trap
+}
+
+unregister_temp_dir_for_cleanup() {
+  local dir="$1"
+  local remaining=()
+  local item
+
+  for item in "${TEMP_DIR_CLEANUP_ITEMS[@]}"; do
+    if [[ "${item}" != "${dir}" ]]; then
+      remaining+=("${item}")
+    fi
+  done
+
+  TEMP_DIR_CLEANUP_ITEMS=("${remaining[@]}")
+}
+
+cleanup_temp_dir_now() {
+  local dir="$1"
+
+  unregister_temp_dir_for_cleanup "${dir}"
+  rm -rf "${dir}"
+}
+
+available_bytes_for_path() {
+  local path="$1"
+  local available_kb
+
+  available_kb="$(
+    df -Pk "${path}" 2>/dev/null \
+      | awk 'NR == 2 { print $4 }'
+  )"
+
+  if [[ -z "${available_kb}" ]] || ! [[ "${available_kb}" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$((available_kb * 1024))"
+}
+
+describe_bytes_in_mib() {
+  local bytes="$1"
+
+  printf '%s MiB' "$(((bytes + MIB - 1) / MIB))"
+}
+
+resolve_temp_root() {
+  local required_bytes="$1"
+  local purpose="$2"
+  local explicit_tmpdir=false
+  local primary_root fallback_root available_bytes
+
+  if [[ -n "${TMPDIR:-}" ]]; then
+    explicit_tmpdir=true
+    primary_root="${TMPDIR}"
+  else
+    primary_root="/tmp"
+  fi
+
+  mkdir -p "${primary_root}"
+
+  if ! available_bytes="$(available_bytes_for_path "${primary_root}")"; then
+    log_err "Could not determine free space for temporary directory root ${primary_root}"
+    return 1
+  fi
+
+  if (( available_bytes >= required_bytes )); then
+    printf '%s\n' "${primary_root}"
+    return 0
+  fi
+
+  if [[ "${explicit_tmpdir}" == "true" ]]; then
+    log_err "TMPDIR (${primary_root}) has only $(describe_bytes_in_mib "${available_bytes}") free, but ${purpose} requires at least $(describe_bytes_in_mib "${required_bytes}")"
+    return 1
+  fi
+
+  fallback_root="${HOME}/.cache/tmp"
+  mkdir -p "${fallback_root}"
+
+  if ! available_bytes="$(available_bytes_for_path "${fallback_root}")"; then
+    log_err "Could not determine free space for fallback temporary directory root ${fallback_root}"
+    return 1
+  fi
+
+  if (( available_bytes < required_bytes )); then
+    log_err "Default temporary directory (/tmp) has insufficient space and fallback ${fallback_root} has only $(describe_bytes_in_mib "${available_bytes}") free, but ${purpose} requires at least $(describe_bytes_in_mib "${required_bytes}")"
+    return 1
+  fi
+
+  log_err "Using fallback temporary directory root ${fallback_root} because /tmp has insufficient free space for ${purpose}"
+  printf '%s\n' "${fallback_root}"
+}
+
+create_managed_temp_dir() {
+  local required_bytes="$1"
+  local purpose="$2"
+  local prefix="$3"
+  local temp_root tmp_dir
+
+  temp_root="$(resolve_temp_root "${required_bytes}" "${purpose}")" || return 1
+  tmp_dir="$(mktemp -d -p "${temp_root}" "${prefix}.XXXXXX")"
+  chmod 755 "${tmp_dir}"
+  register_temp_dir_for_cleanup "${tmp_dir}"
+  printf '%s\n' "${tmp_dir}"
+}
+
 ensure_user_local_bin_on_path() {
   case ":${PATH}:" in
     *":${HOME}/.local/bin:"*)
@@ -221,7 +354,7 @@ install_apt_packages() {
 }
 
 install_git_delta_linux() {
-  local apt_status arch deb_arch download_url latest_url tag tmp_dir version
+  local apt_status arch deb_arch download_size_bytes download_url latest_url tag tmp_dir version
 
   apt_status="$(dpkg-query -W -f='${Status}' git-delta 2>/dev/null || true)"
   if [[ "${apt_status}" == "install ok installed" ]] || command -v delta >/dev/null 2>&1; then
@@ -269,18 +402,24 @@ install_git_delta_linux() {
 
   version="${tag#v}"
   download_url="https://github.com/dandavison/delta/releases/download/${tag}/git-delta_${version}_${deb_arch}.deb"
-  tmp_dir="$(mktemp -d -p /tmp git-delta.XXXXXX)"
-  chmod 755 "${tmp_dir}"
+
+  download_size_bytes="$(
+    curl -fsSLI -o /dev/null -w '%{content_length_download}' "${download_url}" 2>/dev/null || true
+  )"
+  if [[ -z "${download_size_bytes}" ]] || ! [[ "${download_size_bytes}" =~ ^[0-9]+$ ]] || (( download_size_bytes <= 0 )); then
+    download_size_bytes="${GIT_DELTA_TEMP_MIN_FREE_BYTES}"
+  fi
+
+  tmp_dir="$(create_managed_temp_dir "${download_size_bytes}" "git-delta download" "git-delta")" || return 1
 
   if ! curl -fsSL "${download_url}" -o "${tmp_dir}/git-delta.deb"; then
-    rm -rf "${tmp_dir}"
     log "Could not download git-delta release package for ${deb_arch}"
     return 1
   fi
   chmod 644 "${tmp_dir}/git-delta.deb"
 
   sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${tmp_dir}/git-delta.deb"
-  rm -rf "${tmp_dir}"
+  cleanup_temp_dir_now "${tmp_dir}"
   log "Installed git-delta from upstream .deb release"
 }
 
@@ -382,7 +521,7 @@ install_helix_linux_via_snap() {
 
 install_helix_linux() {
   local helix_bin="${HOME}/.local/bin/hx"
-  local arch asset_pattern asset_url extracted_dir tarball tmp_dir
+  local arch asset_name asset_pattern asset_size_bytes asset_url extracted_dir tarball tmp_dir
   local installed=false
 
   arch="$(uname -m 2>/dev/null || true)"
@@ -429,18 +568,26 @@ install_helix_linux() {
     return 1
   }
 
-  asset_url="$(
+  read -r asset_url asset_name asset_size_bytes < <(
     curl -fsSL https://api.github.com/repos/helix-editor/helix/releases/latest \
-      | jq -r --arg pattern "${asset_pattern}" '.assets[] | select(.name | endswith($pattern)) | .browser_download_url' \
+      | jq -r --arg pattern "${asset_pattern}" '.assets[] | select(.name | endswith($pattern)) | [.browser_download_url, .name, (.size | tostring)] | @tsv' \
       | head -n 1
-  )"
+  )
 
   if [[ -z "${asset_url}" ]]; then
     log "Could not find an official Helix release asset for ${arch}"
     return 1
   fi
 
-  tmp_dir="$(mktemp -d)"
+  if [[ -z "${asset_size_bytes}" ]] || ! [[ "${asset_size_bytes}" =~ ^[0-9]+$ ]] || (( asset_size_bytes <= 0 )); then
+    asset_size_bytes="${HELIX_TEMP_MIN_FREE_BYTES}"
+  fi
+
+  if (( asset_size_bytes < HELIX_TEMP_MIN_FREE_BYTES )); then
+    asset_size_bytes="${HELIX_TEMP_MIN_FREE_BYTES}"
+  fi
+
+  tmp_dir="$(create_managed_temp_dir "${asset_size_bytes}" "Helix archive download and extraction (${asset_name})" "helix")" || return 1
   tarball="${tmp_dir}/helix.tar.xz"
 
   curl -fsSL "${asset_url}" -o "${tarball}"
@@ -448,7 +595,6 @@ install_helix_linux() {
 
   extracted_dir="$(find "${tmp_dir}" -mindepth 1 -maxdepth 1 -type d -name 'helix-*' | head -n 1)"
   if [[ -z "${extracted_dir}" || ! -x "${extracted_dir}/hx" || ! -d "${extracted_dir}/runtime" ]]; then
-    rm -rf "${tmp_dir}"
     log "Helix release archive did not contain the expected files"
     return 1
   fi
@@ -459,7 +605,7 @@ install_helix_linux() {
   rm -rf "${HOME}/.config/helix/runtime"
   cp -R "${extracted_dir}/runtime" "${HOME}/.config/helix/runtime"
 
-  rm -rf "${tmp_dir}"
+  cleanup_temp_dir_now "${tmp_dir}"
   if [[ "${installed}" == "true" ]]; then
     log "Upgraded Helix from official release asset"
   else
