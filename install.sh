@@ -142,13 +142,13 @@ create_managed_temp_dir() {
   local required_bytes="$2"
   local purpose="$3"
   local prefix="$4"
-  local temp_root tmp_dir
+  local temp_root managed_tmp_dir
 
   temp_root="$(resolve_temp_root "${required_bytes}" "${purpose}")" || return 1
-  tmp_dir="$(mktemp -d -p "${temp_root}" "${prefix}.XXXXXX")"
-  chmod 755 "${tmp_dir}"
-  register_temp_dir_for_cleanup "${tmp_dir}"
-  printf -v "${__resultvar}" '%s' "${tmp_dir}"
+  managed_tmp_dir="$(mktemp -d -p "${temp_root}" "${prefix}.XXXXXX")"
+  chmod 755 "${managed_tmp_dir}"
+  register_temp_dir_for_cleanup "${managed_tmp_dir}"
+  printf -v "${__resultvar}" '%s' "${managed_tmp_dir}"
 }
 
 ensure_user_local_bin_on_path() {
