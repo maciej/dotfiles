@@ -17,4 +17,4 @@
 - Escape backticks in shell-quoted git commit messages, or avoid them entirely, so the shell does not perform command substitution.
 
 ## Privacy
-- Do not include or repeat real machine or host names in tracked files, comments, docs, commit messages, or AGENT-facing instructions. Use generic labels such as `macOS host`, `Linux host`, or `Raspberry Pi`.
+- Do not include or repeat real machine or host names in tracked files, comments, docs, commit messages, GitHub issues, issue comments, or AGENT-facing instructions. Use generic labels such as `macOS host`, `Linux host`, or `Raspberry Pi`.
