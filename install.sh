@@ -138,16 +138,17 @@ resolve_temp_root() {
 }
 
 create_managed_temp_dir() {
-  local required_bytes="$1"
-  local purpose="$2"
-  local prefix="$3"
+  local __resultvar="$1"
+  local required_bytes="$2"
+  local purpose="$3"
+  local prefix="$4"
   local temp_root tmp_dir
 
   temp_root="$(resolve_temp_root "${required_bytes}" "${purpose}")" || return 1
   tmp_dir="$(mktemp -d -p "${temp_root}" "${prefix}.XXXXXX")"
   chmod 755 "${tmp_dir}"
   register_temp_dir_for_cleanup "${tmp_dir}"
-  printf '%s\n' "${tmp_dir}"
+  printf -v "${__resultvar}" '%s' "${tmp_dir}"
 }
 
 ensure_user_local_bin_on_path() {
@@ -410,7 +411,7 @@ install_git_delta_linux() {
     download_size_bytes="${GIT_DELTA_TEMP_MIN_FREE_BYTES}"
   fi
 
-  tmp_dir="$(create_managed_temp_dir "${download_size_bytes}" "git-delta download" "git-delta")" || return 1
+  create_managed_temp_dir tmp_dir "${download_size_bytes}" "git-delta download" "git-delta" || return 1
 
   if ! curl -fsSL "${download_url}" -o "${tmp_dir}/git-delta.deb"; then
     log "Could not download git-delta release package for ${deb_arch}"
@@ -587,7 +588,7 @@ install_helix_linux() {
     asset_size_bytes="${HELIX_TEMP_MIN_FREE_BYTES}"
   fi
 
-  tmp_dir="$(create_managed_temp_dir "${asset_size_bytes}" "Helix archive download and extraction (${asset_name})" "helix")" || return 1
+  create_managed_temp_dir tmp_dir "${asset_size_bytes}" "Helix archive download and extraction (${asset_name})" "helix" || return 1
   tarball="${tmp_dir}/helix.tar.xz"
 
   curl -fsSL "${asset_url}" -o "${tarball}"
