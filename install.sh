@@ -13,12 +13,264 @@ LEGACY_STOW_PATHS=(
   "${HOME}/.shell_paths"
 )
 
+# Package manifests. Keep these near the top so host package changes stay easy to edit.
+# shellcheck disable=SC3030
+BREW_PACKAGES=(
+  tmux
+  fish
+  bat
+  helix
+  git
+  git-delta
+  fzf
+  ripgrep
+  zoxide
+  gh
+  bash
+  lazygit
+  jq
+  ncurses
+  python
+  sqlite
+  stow
+  uv
+)
+
+# shellcheck disable=SC3030
+APT_PACKAGES=(
+  bat
+  curl
+  fish
+  fzf
+  gh
+  git
+  jq
+  lazygit
+  kitty
+  ncurses-bin
+  python3
+  ripgrep
+  sqlite3
+  stow
+  tmux
+  vim
+  zoxide
+  zsh
+)
+
+# Install non-preview cask apps
+BREW_CASKS=(
+  kitty
+  font-jetbrains-mono
+  zed
+)
+
+UV_TOOL_PACKAGES=(
+  ruff
+  ty
+)
+
+install_brew_packages() {
+  local installed missing pkg
+  installed=$'\n'"$(brew list --versions "${BREW_PACKAGES[@]}" 2>/dev/null || true)"$'\n'
+  missing=()
+
+  for pkg in "${BREW_PACKAGES[@]}"; do
+    if [[ "${installed}" == *$'\n'"${pkg} "* ]] || [[ "${installed}" == *$'\n'"${pkg}@"* ]]; then
+      log "Already installed: ${pkg}"
+    elif brew list --versions "${pkg}" >/dev/null 2>&1; then
+      log "Already installed: ${pkg}"
+    else
+      missing+=("${pkg}")
+    fi
+  done
+
+  if (( ${#missing[@]} == 0 )); then
+    log "All requested brew packages are already installed"
+    return
+  fi
+
+  log "Installing missing brew packages: ${missing[*]}"
+  brew install "${missing[@]}"
+}
+
+install_brew_casks() {
+  local installed missing cask
+  installed=$'\n'"$(brew list --cask 2>/dev/null || true)"$'\n'
+  missing=()
+
+  for cask in "${BREW_CASKS[@]}"; do
+    if [[ "${installed}" == *$'\n'"${cask}"$'\n'* ]]; then
+      log "Already installed cask: ${cask}"
+    else
+      missing+=("${cask}")
+    fi
+  done
+
+  if (( ${#missing[@]} == 0 )); then
+    log "All requested cask apps are already installed"
+    return
+  fi
+
+  log "Installing missing brew casks: ${missing[*]}"
+  brew install --cask "${missing[@]}"
+}
+
+install_apt_packages() {
+  local missing pkg status
+  missing=()
+
+  log "Updating apt package metadata"
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get update
+
+  for pkg in "${APT_PACKAGES[@]}"; do
+    status="$(dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null || true)"
+    if [[ "${status}" == "install ok installed" ]]; then
+      log "Already installed: ${pkg}"
+    else
+      missing+=("${pkg}")
+    fi
+  done
+
+  if (( ${#missing[@]} == 0 )); then
+    log "All requested apt packages are already installed"
+    return
+  fi
+
+  log "Installing missing apt packages: ${missing[*]}"
+  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
+}
+
 log() {
   printf "[dotfiles] %s\n" "$1"
 }
 
 log_err() {
   printf "[dotfiles] %s\n" "$1" >&2
+}
+
+ensure_user_local_bin_on_path() {
+  case ":${PATH}:" in
+    *":${HOME}/.local/bin:"*)
+      ;;
+    *)
+      export PATH="${HOME}/.local/bin:${PATH}"
+      ;;
+  esac
+}
+
+print_help() {
+  cat <<EOF
+Usage: install.sh [--upgrade] [--sync-zed-settings] [--help]
+
+Install dotfiles packages and link configuration files.
+
+Options:
+  --upgrade            On Linux, upgrade Helix and uv when they are managed by
+                       the non-apt installer path. Does not run apt upgrade or
+                       brew upgrade.
+  --sync-zed-settings  Regenerate ~/.config/zed/settings.json from the tracked
+                       shared settings after linking dotfiles.
+  --help               Show this help message and exit.
+EOF
+}
+
+parse_args() {
+  while (( $# > 0 )); do
+    case "$1" in
+      --upgrade)
+        UPGRADE=true
+        ;;
+      --sync-zed-settings)
+        SYNC_ZED_SETTINGS=true
+        ;;
+      --help)
+        print_help
+        exit 0
+        ;;
+      *)
+        log "Unknown argument: $1"
+        print_help
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+bootstrap() {
+  case "${SCRIPT_SOURCE}" in
+    "")
+      log "Running installer from stdin; bootstrapping repository in ${DOTFILES_DIR}"
+      if [[ ! -d "${DOTFILES_DIR}" ]]; then
+        command -v git >/dev/null 2>&1 || {
+          log "git is required to bootstrap dotfiles from a remote installer."
+          exit 1
+        }
+        git clone --depth 1 "${DOTFILES_REPO_URL}" "${DOTFILES_DIR}"
+      elif [[ ! -d "${DOTFILES_DIR}/.git" ]]; then
+        log "Destination exists but is not a git repository: ${DOTFILES_DIR}"
+        log "Set DOTFILES_DIR to a different path and retry."
+        exit 1
+      fi
+
+      exec bash "${DOTFILES_DIR}/install.sh" "$@"
+      ;;
+    /dev/stdin|/dev/fd/*|stdin|-)
+      log "Running installer from stdin; bootstrapping repository in ${DOTFILES_DIR}"
+
+      if [[ ! -d "${DOTFILES_DIR}" ]]; then
+        command -v git >/dev/null 2>&1 || {
+          log "git is required to bootstrap dotfiles from a remote installer."
+          exit 1
+        }
+        git clone --depth 1 "${DOTFILES_REPO_URL}" "${DOTFILES_DIR}"
+      elif [[ ! -d "${DOTFILES_DIR}/.git" ]]; then
+        log "Destination exists but is not a git repository: ${DOTFILES_DIR}"
+        log "Set DOTFILES_DIR to a different path and retry."
+        exit 1
+      fi
+
+      exec bash "${DOTFILES_DIR}/install.sh" "$@"
+      ;;
+
+    *)
+      DOTFILES_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
+      log "Using existing script location at ${DOTFILES_DIR}"
+      ;;
+  esac
+}
+
+parse_args "$@"
+bootstrap "$@"
+
+ensure_brew() {
+  if command -v brew >/dev/null 2>&1; then
+    log "Homebrew already installed"
+  else
+    log "Installing Homebrew"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  fi
+
+  if [[ -x "/opt/homebrew/bin/brew" ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x "/usr/local/bin/brew" ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+}
+
+is_debian_apt_host() {
+  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+  command -v apt-get >/dev/null 2>&1 || return 1
+  [[ -r /etc/os-release ]] || return 1
+
+  grep -Eqi '^(ID|ID_LIKE)=.*(debian|ubuntu)' /etc/os-release
+}
+
+is_raspbian_host() {
+  [[ -r /etc/os-release ]] || return 1
+
+  grep -Eq '^ID=raspbian$' /etc/os-release
 }
 
 readonly MIB=1048576
@@ -149,209 +401,6 @@ create_managed_temp_dir() {
   chmod 755 "${managed_tmp_dir}"
   register_temp_dir_for_cleanup "${managed_tmp_dir}"
   printf -v "${__resultvar}" '%s' "${managed_tmp_dir}"
-}
-
-ensure_user_local_bin_on_path() {
-  case ":${PATH}:" in
-    *":${HOME}/.local/bin:"*)
-      ;;
-    *)
-      export PATH="${HOME}/.local/bin:${PATH}"
-      ;;
-  esac
-}
-
-print_help() {
-  cat <<EOF
-Usage: install.sh [--upgrade] [--sync-zed-settings] [--help]
-
-Install dotfiles packages and link configuration files.
-
-Options:
-  --upgrade            On Linux, upgrade Helix and uv when they are managed by
-                       the non-apt installer path. Does not run apt upgrade or
-                       brew upgrade.
-  --sync-zed-settings  Regenerate ~/.config/zed/settings.json from the tracked
-                       shared settings after linking dotfiles.
-  --help               Show this help message and exit.
-EOF
-}
-
-parse_args() {
-  while (( $# > 0 )); do
-    case "$1" in
-      --upgrade)
-        UPGRADE=true
-        ;;
-      --sync-zed-settings)
-        SYNC_ZED_SETTINGS=true
-        ;;
-      --help)
-        print_help
-        exit 0
-        ;;
-      *)
-        log "Unknown argument: $1"
-        print_help
-        exit 1
-        ;;
-    esac
-    shift
-  done
-}
-
-# shellcheck disable=SC3030
-BREW_PACKAGES=(
-  tmux
-  fish
-  bat
-  helix
-  git
-  git-delta
-  fzf
-  ripgrep
-  zoxide
-  gh
-  bash
-  jq
-  ncurses
-  python
-  sqlite
-  stow
-  uv
-)
-
-# shellcheck disable=SC3030
-APT_PACKAGES=(
-  bat
-  curl
-  fish
-  fzf
-  gh
-  git
-  jq
-  kitty
-  ncurses-bin
-  python3
-  ripgrep
-  sqlite3
-  stow
-  tmux
-  vim
-  zoxide
-  zsh
-)
-
-# Install non-preview cask apps
-BREW_CASKS=(
-  kitty
-  font-jetbrains-mono
-  zed
-)
-
-UV_TOOL_PACKAGES=(
-  ruff
-  ty
-)
-
-bootstrap() {
-  case "${SCRIPT_SOURCE}" in
-    "")
-      log "Running installer from stdin; bootstrapping repository in ${DOTFILES_DIR}"
-      if [[ ! -d "${DOTFILES_DIR}" ]]; then
-        command -v git >/dev/null 2>&1 || {
-          log "git is required to bootstrap dotfiles from a remote installer."
-          exit 1
-        }
-        git clone --depth 1 "${DOTFILES_REPO_URL}" "${DOTFILES_DIR}"
-      elif [[ ! -d "${DOTFILES_DIR}/.git" ]]; then
-        log "Destination exists but is not a git repository: ${DOTFILES_DIR}"
-        log "Set DOTFILES_DIR to a different path and retry."
-        exit 1
-      fi
-
-      exec bash "${DOTFILES_DIR}/install.sh" "$@"
-      ;;
-    /dev/stdin|/dev/fd/*|stdin|-)
-      log "Running installer from stdin; bootstrapping repository in ${DOTFILES_DIR}"
-
-      if [[ ! -d "${DOTFILES_DIR}" ]]; then
-        command -v git >/dev/null 2>&1 || {
-          log "git is required to bootstrap dotfiles from a remote installer."
-          exit 1
-        }
-        git clone --depth 1 "${DOTFILES_REPO_URL}" "${DOTFILES_DIR}"
-      elif [[ ! -d "${DOTFILES_DIR}/.git" ]]; then
-        log "Destination exists but is not a git repository: ${DOTFILES_DIR}"
-        log "Set DOTFILES_DIR to a different path and retry."
-        exit 1
-      fi
-
-      exec bash "${DOTFILES_DIR}/install.sh" "$@"
-      ;;
-
-    *)
-      DOTFILES_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
-      log "Using existing script location at ${DOTFILES_DIR}"
-      ;;
-  esac
-}
-
-parse_args "$@"
-bootstrap "$@"
-
-ensure_brew() {
-  if command -v brew >/dev/null 2>&1; then
-    log "Homebrew already installed"
-  else
-    log "Installing Homebrew"
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  fi
-
-  if [[ -x "/opt/homebrew/bin/brew" ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [[ -x "/usr/local/bin/brew" ]]; then
-    eval "$(/usr/local/bin/brew shellenv)"
-  fi
-}
-
-is_debian_apt_host() {
-  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
-  command -v apt-get >/dev/null 2>&1 || return 1
-  [[ -r /etc/os-release ]] || return 1
-
-  grep -Eqi '^(ID|ID_LIKE)=.*(debian|ubuntu)' /etc/os-release
-}
-
-is_raspbian_host() {
-  [[ -r /etc/os-release ]] || return 1
-
-  grep -Eq '^ID=raspbian$' /etc/os-release
-}
-
-install_apt_packages() {
-  local missing pkg status
-  missing=()
-
-  log "Updating apt package metadata"
-  sudo env DEBIAN_FRONTEND=noninteractive apt-get update
-
-  for pkg in "${APT_PACKAGES[@]}"; do
-    status="$(dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null || true)"
-    if [[ "${status}" == "install ok installed" ]]; then
-      log "Already installed: ${pkg}"
-    else
-      missing+=("${pkg}")
-    fi
-  done
-
-  if (( ${#missing[@]} == 0 )); then
-    log "All requested apt packages are already installed"
-    return
-  fi
-
-  log "Installing missing apt packages: ${missing[*]}"
-  sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
 }
 
 install_git_delta_linux() {
@@ -647,52 +696,6 @@ install_uv_tools() {
   if [[ "${installed}" == "false" && "${UPGRADE}" != "true" ]]; then
     log "Installed requested uv tools"
   fi
-}
-
-install_brew_packages() {
-  local installed missing pkg
-  installed=$'\n'"$(brew list --versions "${BREW_PACKAGES[@]}" 2>/dev/null || true)"$'\n'
-  missing=()
-
-  for pkg in "${BREW_PACKAGES[@]}"; do
-    if [[ "${installed}" == *$'\n'"${pkg} "* ]] || [[ "${installed}" == *$'\n'"${pkg}@"* ]]; then
-      log "Already installed: ${pkg}"
-    elif brew list --versions "${pkg}" >/dev/null 2>&1; then
-      log "Already installed: ${pkg}"
-    else
-      missing+=("${pkg}")
-    fi
-  done
-
-  if (( ${#missing[@]} == 0 )); then
-    log "All requested brew packages are already installed"
-    return
-  fi
-
-  log "Installing missing brew packages: ${missing[*]}"
-  brew install "${missing[@]}"
-}
-
-install_brew_casks() {
-  local installed missing cask
-  installed=$'\n'"$(brew list --cask 2>/dev/null || true)"$'\n'
-  missing=()
-
-  for cask in "${BREW_CASKS[@]}"; do
-    if [[ "${installed}" == *$'\n'"${cask}"$'\n'* ]]; then
-      log "Already installed cask: ${cask}"
-    else
-      missing+=("${cask}")
-    fi
-  done
-
-  if (( ${#missing[@]} == 0 )); then
-    log "All requested cask apps are already installed"
-    return
-  fi
-
-  log "Installing missing brew casks: ${missing[*]}"
-  brew install --cask "${missing[@]}"
 }
 
 remove_legacy_ghostty_config_macos() {
