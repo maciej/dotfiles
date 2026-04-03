@@ -135,12 +135,41 @@ setopt HIST_REDUCE_BLANKS
 setopt EXTENDED_HISTORY
 
 # --- fzf: Ctrl+R fuzzy history + completions ---
-if [[ -n "${BREW_PREFIX}" && -f "$BREW_PREFIX/opt/fzf/shell/key-bindings.zsh" ]]; then
-  source "$BREW_PREFIX/opt/fzf/shell/key-bindings.zsh"
+typeset -a fzf_key_binding_candidates fzf_completion_candidates
+
+fzf_key_binding_candidates=()
+fzf_completion_candidates=()
+
+if [[ -n "${BREW_PREFIX}" ]]; then
+  fzf_key_binding_candidates+=("$BREW_PREFIX/opt/fzf/shell/key-bindings.zsh")
+  fzf_completion_candidates+=("$BREW_PREFIX/opt/fzf/shell/completion.zsh")
 fi
-if [[ -n "${BREW_PREFIX}" && -f "$BREW_PREFIX/opt/fzf/shell/completion.zsh" ]]; then
-  source "$BREW_PREFIX/opt/fzf/shell/completion.zsh"
-fi
+
+fzf_key_binding_candidates+=(
+  /usr/share/fzf/key-bindings.zsh
+  /usr/share/doc/fzf/examples/key-bindings.zsh
+)
+
+fzf_completion_candidates+=(
+  /usr/share/fzf/completion.zsh
+  /usr/share/doc/fzf/examples/completion.zsh
+)
+
+for fzf_file in "${fzf_key_binding_candidates[@]}"; do
+  if [[ -f "$fzf_file" ]]; then
+    source "$fzf_file"
+    break
+  fi
+done
+
+for fzf_file in "${fzf_completion_candidates[@]}"; do
+  if [[ -f "$fzf_file" ]]; then
+    source "$fzf_file"
+    break
+  fi
+done
+
+unset fzf_key_binding_candidates fzf_completion_candidates fzf_file
 
 # --- z command via zoxide ---
 if command -v zoxide >/dev/null 2>&1; then
