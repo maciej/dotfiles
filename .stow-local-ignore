@@ -6,4 +6,5 @@
 ^/AGENTS\.md$
 ^/\.config/zed/settings\.json$
 ^/scripts$
+^/vendor$
 ^/terminfo$

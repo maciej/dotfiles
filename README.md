@@ -25,6 +25,8 @@ To also regenerate the live Zed settings during install, pass:
 curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | bash -s -- --sync-zed-settings 2>&1 | tee ~/install.log
 ```
 
+On macOS, the installer also copies an allowlisted set of vendored Obsidian skills into `~/.codex/skills`. The source snapshot and allowlist live in `vendor/obsidian-skills/` and `vendor/obsidian-skills.manifest`, so the same behavior is available when bootstrapping via `curl | bash`.
+
 ### Link dotfiles with Stow
 
 This repo uses [GNU Stow](https://www.gnu.org/software/stow/manual/stow.html) to symlink tracked dotfiles into your home directory.

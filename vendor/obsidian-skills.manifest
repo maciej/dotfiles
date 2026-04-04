@@ -1,0 +1,12 @@
+OBSIDIAN_SKILLS_SOURCE_REPOSITORY="https://github.com/kepano/obsidian-skills.git"
+OBSIDIAN_SKILLS_SOURCE_REVISION="fa1e131a014576ff8f8919f191a7ca8d8fded39b"
+OBSIDIAN_SKILLS_VENDOR_DIR="vendor/obsidian-skills"
+
+# Install only explicitly allowlisted skills so upstream additions stay inert
+# until they are reviewed and added here.
+OBSIDIAN_SKILLS_ALLOWLIST=(
+  json-canvas
+  obsidian-bases
+  obsidian-cli
+  obsidian-markdown
+)

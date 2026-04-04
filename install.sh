@@ -999,6 +999,18 @@ link_dotfiles() {
   fi
 }
 
+install_vendored_obsidian_skills() {
+  local script_path="${DOTFILES_DIR}/scripts/install-obsidian-skills"
+
+  if [[ ! -f "${script_path}" ]]; then
+    log "Obsidian skills helper is missing: ${script_path}"
+    return 1
+  fi
+
+  log "Installing vendored Obsidian skills"
+  "${script_path}"
+}
+
 sync_zed_settings() {
   local script_path="${DOTFILES_DIR}/scripts/zed-settings"
   local status
@@ -1070,6 +1082,9 @@ main() {
   validate_legacy_stow_targets
   remove_legacy_stow_targets
   link_dotfiles
+  if [[ "${os}" == "Darwin" ]]; then
+    install_vendored_obsidian_skills
+  fi
   rebuild_bat_cache
   if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
     sync_zed_settings
