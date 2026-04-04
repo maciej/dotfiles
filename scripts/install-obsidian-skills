@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+log() {
+  printf "[dotfiles] %s\n" "$1"
+}
+
+log_err() {
+  printf "[dotfiles] %s\n" "$1" >&2
+}
+
+contains_allowlisted_skill() {
+  local needle="$1"
+  local skill
+
+  for skill in "${OBSIDIAN_SKILLS_ALLOWLIST[@]}"; do
+    if [[ "${skill}" == "${needle}" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+main() {
+  local script_dir dotfiles_dir manifest_path os codex_home vendor_root source_root
+  local target_root state_dir state_file source_dir target_dir skill previous_skill
+  local -a previously_installed=()
+
+  os="$(uname -s 2>/dev/null || true)"
+  if [[ "${os}" != "Darwin" ]]; then
+    log "Skipping vendored Obsidian skills on non-macOS host"
+    return 0
+  fi
+
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  dotfiles_dir="$(cd "${script_dir}/.." && pwd)"
+  manifest_path="${dotfiles_dir}/vendor/obsidian-skills.manifest"
+
+  if [[ ! -f "${manifest_path}" ]]; then
+    log_err "Obsidian skills manifest is missing: ${manifest_path}"
+    return 1
+  fi
+
+  # shellcheck source=/dev/null
+  source "${manifest_path}"
+
+  vendor_root="${dotfiles_dir}/${OBSIDIAN_SKILLS_VENDOR_DIR}"
+  source_root="${vendor_root}/skills"
+  codex_home="${CODEX_HOME:-${HOME}/.codex}"
+  target_root="${codex_home}/skills"
+  state_dir="${codex_home}/.dotfiles-state"
+  state_file="${state_dir}/obsidian-skills-installed.txt"
+
+  if [[ ! -d "${source_root}" ]]; then
+    log_err "Vendored Obsidian skills snapshot is missing: ${source_root}"
+    return 1
+  fi
+
+  mkdir -p "${target_root}" "${state_dir}"
+
+  if [[ -f "${state_file}" ]]; then
+    while IFS= read -r previous_skill || [[ -n "${previous_skill}" ]]; do
+      [[ -n "${previous_skill}" ]] || continue
+      previously_installed+=("${previous_skill}")
+    done < "${state_file}"
+  fi
+
+  for previous_skill in "${previously_installed[@]}"; do
+    if contains_allowlisted_skill "${previous_skill}"; then
+      continue
+    fi
+
+    target_dir="${target_root}/${previous_skill}"
+    if [[ -e "${target_dir}" || -L "${target_dir}" ]]; then
+      rm -rf "${target_dir}"
+      log "Removed vendored Obsidian skill no longer allowlisted: ${previous_skill}"
+    fi
+  done
+
+  for skill in "${OBSIDIAN_SKILLS_ALLOWLIST[@]}"; do
+    source_dir="${source_root}/${skill}"
+    target_dir="${target_root}/${skill}"
+
+    if [[ ! -d "${source_dir}" ]]; then
+      log_err "Allowlisted Obsidian skill is missing from vendor snapshot: ${skill}"
+      return 1
+    fi
+
+    rm -rf "${target_dir}"
+    cp -R "${source_dir}" "${target_dir}"
+    log "Installed vendored Obsidian skill: ${skill}"
+  done
+
+  : > "${state_file}"
+  for skill in "${OBSIDIAN_SKILLS_ALLOWLIST[@]}"; do
+    printf "%s\n" "${skill}" >> "${state_file}"
+  done
+
+  log "Installed ${#OBSIDIAN_SKILLS_ALLOWLIST[@]} vendored Obsidian skills from ${OBSIDIAN_SKILLS_SOURCE_REPOSITORY}@${OBSIDIAN_SKILLS_SOURCE_REVISION}"
+}
+
+main "$@"
