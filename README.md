@@ -25,7 +25,14 @@ To also regenerate the live Zed settings during install, pass:
 curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | bash -s -- --sync-zed-settings 2>&1 | tee ~/install.log
 ```
 
-On macOS, the installer also copies an allowlisted set of vendored Obsidian skills into `~/.codex/skills`. The source snapshot and allowlist live in `vendor/obsidian-skills/` and `vendor/obsidian-skills.manifest`, so the same behavior is available when bootstrapping via `curl | bash`.
+This repo also keeps a pinned snapshot of vendored Obsidian skills under `vendor/obsidian-skills/`, with source metadata and the allowlist in `vendor/obsidian-skills.manifest`. Those files are kept in the repo for review and manual use, but `install.sh` does not install them automatically.
+
+If you want to install the allowlisted vendored skills into `~/.codex/skills` manually, run:
+
+```sh
+cd ~/.dotfiles
+./scripts/install-obsidian-skills
+```
 
 ### Link dotfiles with Stow
 
