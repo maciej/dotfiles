@@ -8,6 +8,7 @@ ensure_preferred_path_order() {
   preferred_path=()
   for dir in \
     "$HOME/.local/bin" \
+    "$HOME/.opencode/bin" \
     "/opt/homebrew/bin" \
     "/opt/homebrew/sbin" \
     "/opt/homebrew/opt/postgresql/bin" \
