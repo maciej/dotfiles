@@ -18,6 +18,8 @@
 	lgvf = log --date=iso --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cd) %C(bold blue)%an %Creset%Cblue<%ae>%Creset' --abbrev-commit
 	authors = !git shortlog -s | sort -nbr
 	last-msg = !git log --format='%B' -n 1 ${1:-HEAD}
+	ndiff = "!f() { git diff \"$@\" -- . ':(exclude,attr:gitlab-generated)'; }; f"
+	nshow = "!f() { git show \"$@\" -- . ':(exclude,attr:gitlab-generated)'; }; f"
 [core]
 	excludesfile = ~/.gitignore
 	autocrlf = input
