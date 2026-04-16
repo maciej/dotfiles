@@ -13,6 +13,10 @@ LEGACY_STOW_PATHS=(
   "${HOME}/.shell_paths"
 )
 
+PRECREATED_STOW_DIRECTORIES=(
+  "${HOME}/.agents/skills"
+)
+
 # Package manifests. Keep these near the top so host package changes stay easy to edit.
 # shellcheck disable=SC3030
 BREW_PACKAGES=(
@@ -967,6 +971,20 @@ remove_legacy_stow_targets() {
   done
 }
 
+ensure_precreated_stow_directories() {
+  local dir
+
+  for dir in "${PRECREATED_STOW_DIRECTORIES[@]}"; do
+    if [[ -L "${dir}" ]]; then
+      log "Precreated stow directory is currently a symlink; leaving it in place: ${dir}"
+      continue
+    fi
+
+    mkdir -p "${dir}"
+    log "Ensured directory exists before stow: ${dir}"
+  done
+}
+
 link_dotfiles() {
   if command -v stow >/dev/null 2>&1; then
     local restow="${DOTFILES_STOW_RESTOW:-false}"
@@ -1069,6 +1087,7 @@ main() {
 
   validate_legacy_stow_targets
   remove_legacy_stow_targets
+  ensure_precreated_stow_directories
   link_dotfiles
   rebuild_bat_cache
   if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
