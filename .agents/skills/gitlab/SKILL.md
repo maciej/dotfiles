@@ -230,6 +230,24 @@ glab mr list --label bug,urgent
 glab mr list --per-page 10
 ```
 
+### Recent MR Activity Summary
+
+For a reusable "recent activity" workflow that stays within the `glab mr` command
+family, use the bundled helper:
+
+```bash
+scripts/recent-mrs.py --hours 24
+scripts/recent-mrs.py --hours 24 --json
+scripts/recent-mrs.py --repo group/project --hours 48
+```
+
+If `--hours` is omitted, the helper uses a smart default: `72` on Mondays to
+cover Friday plus the weekend, and `24` on other days.
+
+This helper uses `glab mr list`, `glab mr view`, and `glab mr diff --raw`, then
+filters locally by `updated_at` so you can summarize the last 24 hours without
+falling back to `glab api`.
+
 ### View Merge Request Details
 
 ```bash
