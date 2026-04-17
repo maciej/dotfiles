@@ -265,8 +265,8 @@ glab mr update 123 --reviewer user1,user2
 # Merge when pipeline succeeds
 glab mr merge 123 --yes
 
-# Merge immediately (skip pipeline check)
-glab mr merge 123 --when-pipeline-succeeds=false --yes
+# Attempt the merge now instead of enabling auto-merge
+glab mr merge 123 --auto-merge=false --yes
 
 # Squash and merge
 glab mr merge 123 --squash --yes
@@ -420,15 +420,19 @@ glab mr view --comments
 
 # View comments on specific MR
 glab mr view 123 --comments
+
+# List discussions with filters or JSON output (experimental)
+glab mr note list 123 --state unresolved
+glab mr note list 123 -F json | jq '.[].notes[] | {id, body}'
 ```
 
 #### Replying to Discussion Threads
 
-`glab mr note` creates general MR comments only. To reply to a specific thread:
+`glab mr note` creates general MR comments only. Use `glab mr note list` to inspect discussions, then use the discussions API to reply to a specific thread:
 
 ```bash
-# 1. Find discussion ID from note ID (from URL fragment #note_<id>)
-glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discussions" \
+# 1. Find discussion ID from note ID
+glab mr note list 123 -F json \
   | jq '.[] | select(.notes[].id == <note-id>) | .id'
 
 # 2. Post reply to the thread
@@ -437,10 +441,13 @@ glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discussions/<discuss
   -f body="Your reply message"
 
 # 3. Resolve the discussion after addressing feedback
-glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discussions/<discussion-id>" \
-  -X PUT \
-  -f resolved=true
+glab mr note resolve <note-id> 123
+
+# 4. Reopen the discussion later if needed
+glab mr note reopen <note-id> 123
 ```
+
+`glab mr note list`, `resolve`, and `reopen` are currently marked experimental in `glab`, so fall back to the API only if those subcommands misbehave on your host.
 
 **When to resolve**: Resolve the discussion only when fully addressed—you made the fix, answered the question, or created a follow-up ticket. Do *not* resolve if you asked a clarifying question or promised changes still pending.
 
