@@ -1,4 +1,7 @@
 {
+  "search": {
+    "regex": true
+  },
   "buffer_font_weight": 450.0,
   "soft_wrap": "preferred_line_length",
   "preferred_line_length": 120,
