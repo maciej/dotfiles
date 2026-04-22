@@ -1,6 +1,9 @@
 # Keep preferred user/Homebrew bins ahead of macOS system paths.
 typeset -gU path PATH
 
+# Opt out of GitHub CLI telemetry.
+export GH_TELEMETRY=false
+
 ensure_preferred_path_order() {
   local dir
   local -a preferred_path

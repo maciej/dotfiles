@@ -1,5 +1,6 @@
 set -gx HOMEBREW_NO_ENV_HINTS 1
 set -gx DOCKER_CLI_HINTS false
+set -gx GH_TELEMETRY false
 
 # Keep ANSI colors when paging with less.
 if not set -q LESS
