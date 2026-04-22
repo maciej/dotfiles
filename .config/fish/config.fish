@@ -71,6 +71,10 @@ if test (uname -s) = Darwin
     if test -d "$intellij_bin"
         fish_add_path "$intellij_bin"
     end
+
+    if test -d "/Applications/Brave Browser.app"; or test -d "$HOME/Applications/Brave Browser.app"
+        alias brave-cdp='open -na "Brave Browser" --args --remote-debugging-port=9222 --user-data-dir="$HOME/Library/Application Support/BraveSoftware/Brave-Browser"'
+    end
 end
 
 if test -f "$HOME/.config/sops/age/keys.txt"
