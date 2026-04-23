@@ -26,18 +26,24 @@ For setup details, see https://github.com/browser-use/browser-use/blob/main/brow
 
 If a command fails, run `browser-use close` first to clear any broken session, then retry.
 
-To use an existing Chrome exposed over CDP (preserves that browser's logins/cookies): pass `--connect` or `--cdp-url <url>` on the Browser Use commands.
+To use a logged-in Chrome profile, run Browser Use with `--profile <profile>`. Browser Use launches Chrome from a temporary copy of that profile, so cookies and logins from the real profile are available at session start without controlling the user's live Chrome window.
+To use an existing Chrome exposed over CDP instead, pass `--connect` or `--cdp-url <url>` on the Browser Use commands.
 To use a cloud browser instead: run `browser-use cloud connect` first.
-After connecting to a CDP or cloud browser, commands work the same way.
+Commands work the same way across profile-copy, CDP, managed, and cloud modes.
 
-### If CDP connection fails
+### Choosing an Authenticated Browser Mode
 
-When Browser Use cannot find or connect to a running Chrome with remote debugging, prompt the user with two options:
+When authenticated browsing is needed, use one of these modes:
 
-1. **Use their real Chrome browser** — they need to enable remote debugging first:
+1. **Copy a real Chrome profile** — usually the best default:
+   - Run `browser-use profile list` to see profile display names and directories
+   - Use `browser-use --profile "Default" open <url>` or the relevant profile name/directory
+   - Browser Use copies the selected profile into a temporary `browser-use-user-data-dir-*` directory for the session
+   - Logins present in the real profile at launch are available in the Browser Use session
+2. **Attach to a running Chrome over CDP** — useful when you need to control an already-running browser:
    - Relaunch Chrome with `--remote-debugging-port=9222` or another free local port
    - Then retry with `browser-use --connect open <url>` or `browser-use --cdp-url http://127.0.0.1:9222 open <url>`
-2. **Use a dedicated automation Chrome profile** — safest when authenticated state must persist:
+3. **Use a dedicated automation Chrome profile over CDP** — useful when auth changes must persist from Browser Use back to the same automation profile:
    - Launch Chrome manually with a dedicated `--user-data-dir` and `--remote-debugging-port`
    - Log in once in the visible Chrome window
    - Reuse that same `--user-data-dir` and connect with `browser-use --cdp-url <url>`
@@ -49,12 +55,13 @@ Let the user choose — don't assume one path over the other.
 ```bash
 browser-use open <url>                         # Default: headless Chromium (no setup needed)
 browser-use --headed open <url>                # Visible window (for debugging)
+browser-use --profile "Default" open <url>     # Start from a temporary copy of a real Chrome profile
 browser-use --connect open <url>               # Auto-discover a running Chrome exposed over CDP
 browser-use --cdp-url http://127.0.0.1:9222 open <url>  # Connect to an explicit CDP endpoint
 browser-use cloud connect                      # Cloud browser (zero-config, requires API key)
 ```
 
-After `cloud connect`, subsequent commands go to that browser. For local CDP, keep passing the same `--session` and `--cdp-url` unless you have confirmed your Browser Use version stores that connection in the session.
+After `cloud connect`, subsequent commands go to that browser. For local CDP or a profile-copy session, keep passing the same `--session` and connection/profile flags unless you have confirmed your Browser Use version stores that configuration in the session.
 
 ## Commands
 
@@ -169,25 +176,16 @@ Chain when you don't need intermediate output. Run separately when you need to p
 
 ### Authenticated Browsing
 
-When a task requires an authenticated site (Gmail, GitHub, internal tools), prefer a dedicated persistent Chrome profile exposed over CDP:
+When a task requires an authenticated site (Gmail, GitHub, internal tools), prefer launching from a temporary copy of a real Chrome profile:
 
 ```bash
-mkdir -p "$HOME/.browser-use/auth-profile"
+browser-use profile list                           # Check available profiles
 
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/.browser-use/auth-profile" \
-  --profile-directory=Default \
-  --no-first-run \
-  --no-default-browser-check \
-  --new-window https://github.com
-
-# After logging in once:
-browser-use --session auth --cdp-url http://127.0.0.1:9222 open https://github.com
+browser-use --session auth --profile "Default" open https://github.com
 browser-use --session auth state
 ```
 
-Avoid assuming `browser-use --profile "Default"` means the user's everyday Chrome profile. Depending on Browser Use and Chrome versions, it may launch an isolated or temporary profile instead.
+This does not control the live Chrome window. Browser Use copies the selected profile into a temporary browser-use profile for the session; any new cookies created inside Browser Use should be treated as session-local unless verified otherwise.
 
 ### Exposing Local Dev Servers
 
