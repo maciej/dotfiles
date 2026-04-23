@@ -26,21 +26,21 @@ For setup details, see https://github.com/browser-use/browser-use/blob/main/brow
 
 If a command fails, run `browser-use close` first to clear any broken session, then retry.
 
-To use the user's existing Chrome (preserves logins/cookies): run `browser-use connect` first.
+To use an existing Chrome exposed over CDP (preserves that browser's logins/cookies): pass `--connect` or `--cdp-url <url>` on the Browser Use commands.
 To use a cloud browser instead: run `browser-use cloud connect` first.
-After either, commands work the same way.
+After connecting to a CDP or cloud browser, commands work the same way.
 
-### If `browser-use connect` fails
+### If CDP connection fails
 
-When `browser-use connect` cannot find a running Chrome with remote debugging, prompt the user with two options:
+When Browser Use cannot find or connect to a running Chrome with remote debugging, prompt the user with two options:
 
 1. **Use their real Chrome browser** — they need to enable remote debugging first:
-   - Open `chrome://inspect/#remote-debugging` in Chrome, or relaunch Chrome with `--remote-debugging-port=9222`
-   - Then retry `browser-use connect`
-2. **Use managed Chromium with their Chrome profile** — no Chrome setup needed:
-   - Run `browser-use profile list` to show available profiles
-   - Ask which profile they want, then use `browser-use --profile "ProfileName" open <url>`
-   - This launches a separate Chromium instance with their profile data (cookies, logins, extensions)
+   - Relaunch Chrome with `--remote-debugging-port=9222` or another free local port
+   - Then retry with `browser-use --connect open <url>` or `browser-use --cdp-url http://127.0.0.1:9222 open <url>`
+2. **Use a dedicated automation Chrome profile** — safest when authenticated state must persist:
+   - Launch Chrome manually with a dedicated `--user-data-dir` and `--remote-debugging-port`
+   - Log in once in the visible Chrome window
+   - Reuse that same `--user-data-dir` and connect with `browser-use --cdp-url <url>`
 
 Let the user choose — don't assume one path over the other.
 
@@ -49,12 +49,12 @@ Let the user choose — don't assume one path over the other.
 ```bash
 browser-use open <url>                         # Default: headless Chromium (no setup needed)
 browser-use --headed open <url>                # Visible window (for debugging)
-browser-use connect                            # Connect to user's Chrome (preserves logins/cookies)
+browser-use --connect open <url>               # Auto-discover a running Chrome exposed over CDP
+browser-use --cdp-url http://127.0.0.1:9222 open <url>  # Connect to an explicit CDP endpoint
 browser-use cloud connect                      # Cloud browser (zero-config, requires API key)
-browser-use --profile "Default" open <url>     # Real Chrome with specific profile
 ```
 
-After `connect` or `cloud connect`, all subsequent commands go to that browser — no extra flags needed.
+After `cloud connect`, subsequent commands go to that browser. For local CDP, keep passing the same `--session` and `--cdp-url` unless you have confirmed your Browser Use version stores that connection in the session.
 
 ## Commands
 
@@ -169,13 +169,25 @@ Chain when you don't need intermediate output. Run separately when you need to p
 
 ### Authenticated Browsing
 
-When a task requires an authenticated site (Gmail, GitHub, internal tools), use Chrome profiles:
+When a task requires an authenticated site (Gmail, GitHub, internal tools), prefer a dedicated persistent Chrome profile exposed over CDP:
 
 ```bash
-browser-use profile list                           # Check available profiles
-# Ask the user which profile to use, then:
-browser-use --profile "Default" open https://github.com  # Already logged in
+mkdir -p "$HOME/.browser-use/auth-profile"
+
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.browser-use/auth-profile" \
+  --profile-directory=Default \
+  --no-first-run \
+  --no-default-browser-check \
+  --new-window https://github.com
+
+# After logging in once:
+browser-use --session auth --cdp-url http://127.0.0.1:9222 open https://github.com
+browser-use --session auth state
 ```
+
+Avoid assuming `browser-use --profile "Default"` means the user's everyday Chrome profile. Depending on Browser Use and Chrome versions, it may launch an isolated or temporary profile instead.
 
 ### Exposing Local Dev Servers
 
