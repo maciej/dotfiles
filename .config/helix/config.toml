@@ -1,5 +1,9 @@
 theme = "catppuccin_macchiato"
 
+[editor]
+# Use OSC 52 so yanking to the system clipboard works through SSH in Ghostty.
+clipboard-provider = "termcode"
+
 [editor.soft-wrap]
 enable = true
 
