@@ -10,6 +10,7 @@ SYNC_ZED_SETTINGS=false
 
 # Paths that used to be stowed into $HOME but are no longer present in the repo.
 LEGACY_STOW_PATHS=(
+  "${HOME}/.agents/skills/browser-use"
   "${HOME}/.shell_paths"
 )
 
