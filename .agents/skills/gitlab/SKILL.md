@@ -5,235 +5,55 @@ description: Load before running any glab commands to ensure correct CLI syntax.
 
 # GitLab Workflow
 
-Work with GitLab repositories, merge requests, issues, and CI/CD pipelines using the `glab` CLI.
+Use the `glab` CLI for GitLab repositories, merge requests, issues, and CI/CD.
 
-## FIRST: Determine GitLab Host
+## Resolve GitLab Context
 
-Resolve which GitLab instance to use (in priority order):
+Determine the GitLab host before running `glab`:
 
-1. **Current repository remote** (highest priority)
+1. Prefer the current repository remote:
    ```bash
-   git remote -v | grep -i gitlab
+   git remote -v | rg -i gitlab
    ```
-   Extract hostname from remote URL (e.g., `gitlab.example.com` from `git@gitlab.example.com:org/repo.git`)
+2. If there is no GitLab remote, use `$GITLAB_HOST`.
+3. If the user provided a GitLab URL, extract the hostname from it.
 
-2. **GITLAB_HOST environment variable**
-   ```bash
-   echo $GITLAB_HOST
-   ```
-   Use if no GitLab remote exists in current directory
+If no GitLab host or repository context can be determined, this skill does not apply.
 
-3. **Deduce from context**
-   If user provides a GitLab URL, extract the hostname from it.
-   Example: `https://gitlab.example.com/org/repo/-/merge_requests/123` → use `gitlab.example.com`
+## Operating Modes
 
-If none of the above apply and no GitLab context can be determined, this skill doesn't apply.
+- **Repository work**: Create MRs, manage CI, review code, and update branches from a directory with a GitLab remote.
+- **Investigation**: Search issues, MRs, projects, or code from any directory when `glab` has a host from `$GITLAB_HOST`, `-R`, or the user-provided URL.
 
-## Usage Modes
+## Agent Rules
 
-This skill supports two modes:
+- Verify the GitLab remote or host first; do not run repository-scoped `glab` commands in a non-GitLab repo.
+- Use `--yes` for MR create/update/merge commands when available so agentic tooling does not hang on confirmation prompts.
+- Prefer explicit polling over live CI watching: check with `glab ci status`, then `glab ci list` or the pipeline URL until the pipeline reaches a terminal state.
+- Pull logs immediately on failure with `glab ci trace <job-name-or-id>`; the log usually contains the actionable error.
+- Retry likely flakes once with `glab ci retry <job-name-or-id>`. If it fails again, treat it as real.
+- Pipe `glab api` responses through `jq` or redirect them when only the side effect matters; full JSON responses are often large.
+- On `HTTP 429`, back off and retry after a delay; pace bulk API/comment workflows. Read `references/rate-limits.md` only when debugging limit behavior.
+- On auth errors, run `glab auth status`; ask the user before starting a login/install flow.
+- Use `glab <command> --help` for ordinary command syntax. Keep this skill for local gotchas, fragile flows, and reusable helpers.
 
-- **Repository work**: Creating MRs, managing CI, reviewing code. Requires being in a directory with a GitLab remote.
-- **Investigation**: Searching issues/MRs/code across GitLab projects. Works from any directory with `glab` configured (via `GITLAB_HOST` or prior authentication).
-
-## Key Guidelines
-
-- **Verify remote first**: No GitLab remote = don't use `glab`
-- **Check CI before requesting review**: Run `glab ci status` after pushing and re-check with `glab ci list` or the pipeline URL until the pipeline actually finishes. Fix failures before requesting reviews.
-- **Do not rely on live CI watching mode**: It can be misleading for long-running pipelines. Prefer explicit polling with non-live commands.
-- **Pull logs immediately on failure**: Run `glab ci trace <job-name>` first. The logs contain the answer.
-- **Use draft MRs for WIP**: Create with `--draft`, mark ready with `glab mr update <id> --ready`
-- **Reference issues explicitly**: Use `Closes #123` for auto-close, `Relates to #123` for tracking only
-- **Retry flaky failures, fix real ones**: Retry a job with `glab ci retry <job-name>`. If it fails again, it's a real issue.
-- **Always use `--yes` for MR creation**: Include `--yes` to skip the submission confirmation prompt. Interactive mode doesn't work with agentic tooling.
-- **Filter API output**: `glab api` calls return full JSON responses (often 300KB+). Always pipe through `jq` to extract needed fields, or redirect to `/dev/null` if you only care about the side effect.
-
-## Rate Limits
-
-GitLab instances may enforce rate limits on API and web requests. AI agents making many sequential requests can hit these easily.
-
-### Detection
-
-GitLab returns **HTTP 429 Too Many Requests** when a rate limit is exceeded.
-
-GitLab also returns `RateLimit-*` response headers (`RateLimit-Remaining`, `Retry-After`, etc.), but `glab api` does not surface these by default. Use `glab api -i` to inspect headers if you need to debug rate-limit issues, but do not rely on header monitoring during normal operation.
-
-**Caveat**: GitLab has both infrastructure-level and application-level rate limits (e.g. issue creation, project export). Application-level limits are not reflected in response headers.
-
-### Best Practices
-
-1. **Handle 429 reactively**: On HTTP 429, back off and retry after a delay (start with 30s, double on repeated 429s)
-2. **Pace bulk operations**: When making many sequential API calls (e.g. posting inline review comments), add a brief pause between requests
-3. **Retry on transient 500/503**: These may occur when limits engage; retry once with backoff before treating as a real error
-4. **Minimize request count**: Use `jq` to extract needed fields from a single response rather than making multiple narrower requests
-
-### Optional Local Config
-
-If `config.json` exists in the skill root, use its `rate_limits` values as instance-specific hints.
-
-```json
-{
-  "rate_limits": {
-    "authenticated_api": { "max_requests": 36000, "period": "1 hour" },
-    "authenticated_web": { "max_requests": 36000, "period": "1 hour" },
-    "sustained_requests_per_second_hint": 10,
-    "low_remaining_threshold": 1000
-  }
-}
-```
-
-Treat every field as optional. Missing `config.json` or missing keys are not errors; continue with the generic 429/backoff guidance above.
-
-For portable guidance and public GitLab limits, see `references/rate-limits.md`.
-
-## Quick Start: Branch → MR
-
-The most common workflow—create a branch, make changes, open an MR:
+## Common MR Flow
 
 ```bash
-git checkout -b <branch-name>
-# make changes
-git add . && git commit -m "<your commit message>"
-git push -u origin <branch-name>
 glab mr create --fill --target-branch main --yes
+glab mr create --draft --fill --yes
+glab mr update <id> --ready --yes
 ```
 
-## Quick Reference: CI Commands
+Use `--draft` for WIP and `glab mr update <id> --ready` when it is ready for review. Reference issues explicitly in descriptions: `Closes #123` to auto-close, `Relates to #123` for tracking only.
 
-| Task | Command |
-|------|---------|
-| Check pipeline status | `glab ci status` |
-| List pipelines | `glab ci list` |
-| Pull job logs | `glab ci trace <job-name>` |
-| Retry failed job | `glab ci retry <job-name>` |
-| Run new pipeline | `glab ci run` |
-| Download artifacts | `glab job artifact <ref> <job-name>` |
+For less common clone, issue, release, search, and MR command examples, read `references/REFERENCE.md`.
 
-## Prerequisites
+## Bundled Helpers
 
-This skill requires the `glab` CLI. If `glab` commands fail with "command not found", ask the user to install it:
+### Recent MR Activity
 
-```bash
-# macOS
-brew install glab
-
-# Linux (Debian/Ubuntu)
-sudo apt install glab
-
-# Other methods: https://gitlab.com/gitlab-org/cli#installation
-```
-
-Authentication must be configured. Run `glab auth status` to check. If not authenticated:
-
-```bash
-glab auth login
-```
-
----
-
-# Detailed Reference
-
-## Repository Setup
-
-### Clone a Repository
-
-```bash
-# Clone via glab (uses authenticated user context)
-glab repo clone <owner>/<repo>
-
-# Clone with specific branch
-glab repo clone <owner>/<repo> -- --branch <branch>
-
-# Clone to specific directory
-glab repo clone <owner>/<repo> <directory>
-```
-
-### Fork a Repository
-
-```bash
-# Fork to your namespace
-glab repo fork <owner>/<repo>
-
-# Fork and clone immediately
-glab repo fork <owner>/<repo> --clone
-```
-
-### View Repository Info
-
-```bash
-glab repo view
-glab repo view <owner>/<repo>
-```
-
-## Branch and Changes
-
-Follow your team's conventions for branch names and commit messages (e.g., `PROJ-123: description`, conventional commits, or other formats).
-
-### Create a Branch
-
-```bash
-git checkout -b <branch-name>
-# Make changes, stage, and commit
-git add .
-git commit -m "<your commit message>"
-```
-
-### Push Branch
-
-```bash
-git push -u origin <branch-name>
-```
-
-## Merge Request Operations
-
-### Create a Merge Request
-
-```bash
-# With specific options
-glab mr create \
-  --title "feat: add new feature" \
-  --description "$(cat <<'EOF'
-Your description here (supports markdown)
-EOF
-)" \
-  --target-branch main \
-  --assignee @me \
-  --label "enhancement" \
-  --yes
-
-# Create as draft
-glab mr create --draft --title "WIP: feature in progress" --yes
-
-# Create and auto-fill from commits
-glab mr create --fill --yes
-```
-
-### List Merge Requests
-
-```bash
-# List open MRs (default)
-glab mr list
-
-# List by state
-glab mr list --merged      # merged MRs only
-glab mr list --closed      # closed MRs only
-glab mr list --all         # all MRs (open, merged, closed)
-
-# Filter by author or assignee
-glab mr list --author @me
-glab mr list --assignee @me
-
-# Filter by label
-glab mr list --label bug,urgent
-
-# Limit results
-glab mr list --per-page 10
-```
-
-### Recent MR Activity Summary
-
-For a reusable "recent activity" workflow that stays within the `glab mr` command
-family, use the bundled helper:
+Use this helper for compact recent-MR summaries without falling back to `glab api`:
 
 ```bash
 scripts/recent-mrs.py --hours 24
@@ -241,137 +61,66 @@ scripts/recent-mrs.py --hours 24 --json
 scripts/recent-mrs.py --repo group/project --hours 48
 ```
 
-If `--hours` is omitted, the helper uses a smart default: `72` on Mondays to
-cover Friday plus the weekend, and `24` on other days.
+If `--hours` is omitted, it uses `72` on Mondays to cover Friday plus the weekend, and `24` on other days.
 
-This helper uses `glab mr list`, `glab mr view`, and `glab mr diff --raw`, then
-filters locally by `updated_at` so you can summarize the last 24 hours without
-falling back to `glab api`.
+### Review Queue
 
-### View Merge Request Details
-
-```bash
-# View current branch's MR
-glab mr view
-
-# View specific MR
-glab mr view 123
-```
-
-### Update a Merge Request
-
-```bash
-# Update title
-glab mr update 123 --title "new title"
-
-# Add labels
-glab mr update 123 --label "reviewed,approved"
-
-# Change assignees
-glab mr update 123 --assignee user1,user2
-
-# Mark ready for review (remove draft)
-glab mr update 123 --ready
-
-# Add reviewers
-glab mr update 123 --reviewer user1,user2
-```
-
-### Merge a Merge Request
-
-```bash
-# Merge when pipeline succeeds
-glab mr merge 123 --yes
-
-# Attempt the merge now instead of enabling auto-merge
-glab mr merge 123 --auto-merge=false --yes
-
-# Squash and merge
-glab mr merge 123 --squash --yes
-
-# Delete source branch after merge
-glab mr merge 123 --remove-source-branch --yes
-```
-
-### Check Out an MR Locally
-
-```bash
-# Check out MR branch locally for testing/review
-glab mr checkout 123
-```
-
-## Code Review
-
-This section applies when **giving** or **receiving** code reviews. Both workflows share common commands but differ in intent and process.
-
-### Giving Code Reviews
-
-When reviewing someone else's MR, outcomes include:
-
-| Outcome | When to use |
-|---------|-------------|
-| **Approve** | Code is good to merge, or only has minor nits |
-| **Comment without approval** | Changes needed before merge |
-| **Remove self as reviewer** | Wrong person, or delegating to someone else |
-
-**Prefer inline discussions** over general comments when feedback targets specific lines or code blocks. Inline discussions anchor the comment to the exact location, making it easier for the author to address. Use general MR comments for architectural feedback, overall approach questions, or praise.
-
-**Review queue**: To get MRs pending your review, run:
+Use this helper to list non-draft MRs assigned to you for review, excluding MRs you already approved:
 
 ```bash
 scripts/review-queue.py <gitlab-host>
+scripts/review-queue.py <gitlab-host> --json
+scripts/review-queue.py <gitlab-host> --user <username>
 ```
 
-Options:
-- `--json`: Output as JSON (easier for programmatic processing)
-- `--user <name>`: Check another user's queue
+The GitLab API cannot filter "not approved by me" directly, so the helper checks each MR's approvals.
 
-This script lists MRs where you're a reviewer, excluding drafts and MRs you've already approved. The GitLab API doesn't support "not approved by me" filtering, so the script checks each MR's approval status individually.
+## Code Review Notes
 
-#### Review Process
-
-The agent can assist with code reviews in several ways:
-
-1. **First pass**: Agent reviews the diff and drafts suggested comments
-2. **Refinement**: User writes initial comments, agent refines wording or adds detail
-3. **Combined**: Agent does first pass, user adjusts, agent finalizes
-
-#### Viewing the Diff
+View context:
 
 ```bash
-# View diff for current branch's MR
-glab mr diff
-
-# View diff for specific MR
-glab mr diff 123
-
-# View MR details with discussion context
-glab mr view 123 --comments
+glab mr diff <id>
+glab mr view <id> --comments
+glab mr note list <id> --state unresolved
+glab mr note list <id> -F json | jq '.[].notes[] | {id, body}'
 ```
 
-#### Approving
+Approve:
 
 ```bash
-glab mr approve 123
+glab mr approve <id>
 ```
 
-You can approve an MR even after leaving nit comments—this signals "good to merge once you've addressed these minor points."
+If approving an already-approved MR returns `401 Unauthorized`, treat it as "already approved" rather than a permissions failure.
 
-**Caveat**: Approving an MR you've already approved returns `401 Unauthorized`—this is not a permissions error, it means you already approved. When processing multiple MRs, either check approval status first via the approvals API, or treat 401 as "already approved" rather than a failure.
+Add a general MR comment:
 
-#### Creating Inline Discussions (Diff Notes)
+```bash
+glab mr note create <id> -m "Overall this looks good. One architectural question: ..."
+```
 
-Inline discussions require position information. First, get the diff version SHAs:
+Remove yourself as reviewer:
+
+```bash
+glab mr update <id> --reviewer=-username --yes
+```
+
+The `@me` shorthand does not work with the `-` prefix; use the actual GitLab username.
+
+### Inline Discussions
+
+Prefer inline discussions when feedback targets a specific line. Inline discussions require diff position SHAs:
 
 ```bash
 glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/versions" \
   | jq '.[0] | {base_commit_sha, head_commit_sha, start_commit_sha}'
 ```
 
-Then create the inline discussion using JSON input (**note**: the `-f` bracket syntax doesn't work reliably for nested position objects):
+Create the discussion with JSON input; `-f` bracket syntax is unreliable for nested `position` objects:
 
 ```bash
-cat << 'EOF' | glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discussions" \
+cat <<'EOF' | glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discussions" \
   -X POST -H "Content-Type: application/json" --input -
 {
   "body": "Your comment here",
@@ -389,158 +138,38 @@ cat << 'EOF' | glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discu
 EOF
 ```
 
-**Position fields**:
-- `new_line`: Line number in the new version (for added/modified lines). Set `old_line: null`.
-- `old_line`: Line number in the old version (for removed lines). Set `new_line: null`.
-- Both `old_line` and `new_line`: For context lines (unchanged).
+For removed lines, set `old_line` and `new_line: null`. For unchanged context lines, set both. Verify success by checking that the note has `type: "DiffNote"` and a non-null `position`.
 
-**Verification**: A successful inline comment has `type: "DiffNote"` and non-null `position`. If you get `type: "DiscussionNote"` with `position: null`, the position was malformed.
+### Reply and Resolve
 
-#### Creating General Comments
-
-For feedback not tied to specific code:
+`glab mr note` creates general comments unless you target a discussion. Use `glab mr note list` to find the discussion or note ID, then reply through the discussions API:
 
 ```bash
-glab mr note 123 -m "Overall this looks good. One architectural question: ..."
-```
-
-#### Removing Yourself as Reviewer
-
-```bash
-glab mr update 123 --reviewer=-username
-```
-
-Note: The `@me` shorthand does not work with the `-` prefix. Use your actual GitLab username.
-
-### Receiving Code Reviews
-
-When addressing feedback on your own MR, there are two common scenarios:
-
-1. **Specific MR**: Pull comments from a particular MR by ID
-2. **Current branch MR**: Address comments on the MR for your current working branch (more typical)
-
-#### Process
-
-1. **Understand the feedback**: Fetch and read all comments
-2. **Plan the response**: For each comment, decide to:
-   - Make the requested change
-   - Reply with clarification or pushback
-   - Create a follow-up ticket for larger scope items
-3. **Implement changes**: Make code amendments locally
-4. **Reply to threads**: Acknowledge feedback, explain changes made
-5. **Resolve discussions**: Mark threads as resolved once fully addressed
-
-#### Fetching Comments
-
-```bash
-# View comments on current branch's MR
-glab mr view --comments
-
-# View comments on specific MR
-glab mr view 123 --comments
-
-# List discussions with filters or JSON output (experimental)
-glab mr note list 123 --state unresolved
-glab mr note list 123 -F json | jq '.[].notes[] | {id, body}'
-```
-
-#### Replying to Discussion Threads
-
-`glab mr note` creates general MR comments only. Use `glab mr note list` to inspect discussions, then use the discussions API to reply to a specific thread:
-
-```bash
-# 1. Find discussion ID from note ID
-glab mr note list 123 -F json \
-  | jq '.[] | select(.notes[].id == <note-id>) | .id'
-
-# 2. Post reply to the thread
 glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discussions/<discussion-id>/notes" \
   -X POST \
   -f body="Your reply message"
 
-# 3. Resolve the discussion after addressing feedback
-glab mr note resolve <note-id> 123
-
-# 4. Reopen the discussion later if needed
-glab mr note reopen <note-id> 123
+glab mr note resolve <note-or-discussion-id> <mr-iid>
+glab mr note reopen <note-or-discussion-id> <mr-iid>
 ```
 
-`glab mr note list`, `resolve`, and `reopen` are currently marked experimental in `glab`, so fall back to the API only if those subcommands misbehave on your host.
+Resolve only after the feedback is fully addressed.
 
-**When to resolve**: Resolve the discussion only when fully addressed—you made the fix, answered the question, or created a follow-up ticket. Do *not* resolve if you asked a clarifying question or promised changes still pending.
-
-## CI/CD Monitoring and Failure Remediation
-
-CI job failures are the most common blocker for merging MRs.
-
-### Check Pipeline Status
+## CI/CD
 
 ```bash
-# Quick status check for current branch
 glab ci status
-
-# List recent pipelines with status
 glab ci list
-
-# Check status for a specific MR
-glab mr view 123  # Shows pipeline status in MR details
+glab ci trace <job-name-or-id>
+glab ci retry <job-name-or-id>
+glab ci run
+glab job artifact <ref> <job-name>
 ```
 
-Prefer repeated non-live checks when waiting for completion.
+When a pipeline fails, read `references/ci-troubleshooting.md` for the remediation workflow and common failure patterns.
 
-**Pipeline states**: `pending`, `running`, `success`, `failed`, `canceled`, `skipped`
+## References
 
-### Pull Job Logs
-
-```bash
-# Stream logs from a running or completed job
-glab ci trace <job-name>
-```
-
-### When a Pipeline Fails
-
-For troubleshooting failed pipelines—identifying failed jobs, analyzing logs, common failure patterns, retry vs fix decisions—see [references/ci-troubleshooting.md](references/ci-troubleshooting.md).
-
-## Searching GitLab
-
-### Search Issues
-
-```bash
-# Search in current project
-glab issue list --search "bug in login"
-
-# Search by label
-glab issue list --label "bug"
-
-# Search across all accessible projects (use API)
-glab api "search?scope=issues&search=login+error" | jq '.[] | {id, title, web_url}'
-```
-
-### Search Merge Requests
-
-```bash
-# Search in current project
-glab mr list --search "refactor auth"
-
-# Search across GitLab (use API)
-glab api "search?scope=merge_requests&search=auth+refactor" | jq '.[] | {id, title, web_url}'
-```
-
-### Search Code/Projects
-
-```bash
-# Search for projects
-glab api "search?scope=projects&search=my-library" | jq '.[] | {id, name, web_url}'
-
-# Search code (blobs)
-glab api "search?scope=blobs&search=deprecated+function" | jq '.[] | {path, project_id, ref}'
-```
-
-## Additional Reference
-
-For less common operations (multi-repo workflows, issues, releases, API access, CI debugging, artifacts), see [references/REFERENCE.md](references/REFERENCE.md).
-
-## Additional Notes
-
-- **Check authentication on errors**: If `glab` commands fail with 401/403, run `glab auth status` and re-authenticate with `glab auth login`.
-- **Branch naming**: Follow your team's conventions (e.g., `feature/`, `fix/`, `$USER/`, or project-specific prefixes).
+- `references/REFERENCE.md`: less common GitLab command examples and API patterns
+- `references/ci-troubleshooting.md`: failed pipeline remediation
+- `references/rate-limits.md`: GitLab rate-limit behavior and optional local config
