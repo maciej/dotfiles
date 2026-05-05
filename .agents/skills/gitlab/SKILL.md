@@ -94,6 +94,8 @@ glab mr approve <id>
 
 If approving an already-approved MR returns `401 Unauthorized`, treat it as "already approved" rather than a permissions failure.
 
+When posting or replying to MR comments or inline discussions with text you composed in your own words, prefix the body with `✨ `. Do not add the prefix when using user-dictated wording or refining text the user already wrote.
+
 Add a general MR comment:
 
 ```bash
