@@ -30,12 +30,14 @@ glab repo view <owner>/<repo>
 Create:
 
 ```bash
-glab mr create \
-  --title "feat: add new feature" \
-  --description "$(cat <<'EOF'
+description_file="$(mktemp -t gitlab-mr-description.XXXXXX)"
+cat > "$description_file" <<'EOF'
 Your description here (supports markdown)
 EOF
-)" \
+
+glab mr create \
+  --title "feat: add new feature" \
+  --description "$(cat "$description_file")" \
   --target-branch main \
   --assignee @me \
   --label "enhancement" \
@@ -44,6 +46,12 @@ EOF
 glab mr create --draft --title "WIP: feature in progress" --yes
 glab mr create --fill --yes
 ```
+
+Keep generated Markdown bodies out of shell-quoted arguments. If an MR
+description, issue description, release note, or comment may contain backticks,
+code fences, `$`, `!`, or quotes, write it with a quoted heredoc first and pass
+it through a file, stdin, or `--input -` instead of embedding it directly in the
+command line.
 
 List and view:
 
@@ -171,6 +179,9 @@ Reference issues in MR descriptions:
 glab mr create --fill --description "Closes #42" --yes
 glab mr create --fill --description "Relates to #42" --yes
 ```
+
+Use the file-based description pattern above when the description is longer than
+these simple one-liners or contains Markdown.
 
 ## Releases
 

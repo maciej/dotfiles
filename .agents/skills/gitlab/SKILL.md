@@ -36,6 +36,7 @@ If no GitLab host or repository context can be determined, this skill does not a
 - On `HTTP 429`, back off and retry after a delay; pace bulk API/comment workflows. Read `references/rate-limits.md` only when debugging limit behavior.
 - On auth errors, run `glab auth status`; ask the user before starting a login/install flow.
 - Use `glab <command> --help` for ordinary command syntax. Keep this skill for local gotchas, fragile flows, and reusable helpers.
+- Do not place Markdown that may contain backticks directly inside shell-quoted arguments such as `--description "..."`, `-m "..."`, or `-f body="..."`; the parent shell can interpret them as command substitution. Use `--fill`, stdin, `--input -`, or a quoted heredoc/file pattern instead.
 
 ## Common MR Flow
 
@@ -99,7 +100,9 @@ When posting or replying to MR comments or inline discussions with text you comp
 Add a general MR comment:
 
 ```bash
-glab mr note create <id> -m "Overall this looks good. One architectural question: ..."
+cat <<'EOF' | glab mr note create <id>
+Overall this looks good. One architectural question: ...
+EOF
 ```
 
 Remove yourself as reviewer:
@@ -147,15 +150,29 @@ For removed lines, set `old_line` and `new_line: null`. For unchanged context li
 `glab mr note` creates general comments unless you target a discussion. Use `glab mr note list` to find the discussion or note ID, then reply through the discussions API:
 
 ```bash
+reply_file="$(mktemp -t gitlab-reply.XXXXXX)"
+cat > "$reply_file" <<'EOF'
+Your reply message
+EOF
+
 glab api "projects/<owner>%2F<repo>/merge_requests/<mr-iid>/discussions/<discussion-id>/notes" \
   -X POST \
-  -f body="Your reply message"
+  -F body=@"$reply_file"
 
 glab mr note resolve <note-or-discussion-id> <mr-iid>
 glab mr note reopen <note-or-discussion-id> <mr-iid>
 ```
 
 Resolve only after the feedback is fully addressed.
+
+### Reviewer Follow-up Fixes
+
+When the user asks you to fix up an MR after review feedback, prepare the follow-up for their approval instead of sending it immediately:
+
+1. Inspect unresolved discussions/comments, implement the local fix, and run the relevant checks when practical.
+2. Do not push, post replies, resolve discussions, or approve/merge as part of the follow-up unless the user explicitly asked for that exact action.
+3. Hand the user a concise summary of the fix, the validation performed, and the exact suggested replies/resolutions you propose to send.
+4. Prompt them to respond with `LGTM` to proceed with the proposed push/replies/resolutions, or `Corrected` with edits if they want changes first.
 
 ## CI/CD
 
