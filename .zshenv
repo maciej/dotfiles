@@ -37,11 +37,6 @@ if [[ -f "$HOME/.cargo/env" ]]; then
   . "$HOME/.cargo/env"
 fi
 
-# Optional Cloudflare WARP certs.
-if [[ -f "$HOME/.local/share/cloudflare-warp-certs/config.sh" ]]; then
-  . "$HOME/.local/share/cloudflare-warp-certs/config.sh"
-fi
-
 ensure_preferred_path_order
 
 # Set editor based on session type:

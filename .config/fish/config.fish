@@ -98,11 +98,6 @@ if command -q himalaya
     end
 end
 
-# Cloudflare WARP certs (harmless no-op when file is absent).
-if test -f "$HOME/.local/share/cloudflare-warp-certs/config.fish"
-    source "$HOME/.local/share/cloudflare-warp-certs/config.fish"
-end
-
 # Local, machine-specific overrides.
 if test -f "$HOME/.config/fish/config.local.fish"
     source "$HOME/.config/fish/config.local.fish"

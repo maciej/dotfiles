@@ -64,10 +64,6 @@
 	required = true
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
-[includeIf "hasconfig:remote.*.url:git@gitlab.cfdata.org:*/**"]
-	path = ~/.gitconfig-cloudflare
-[includeIf "hasconfig:remote.*.url:ssh://git@gitlab.cfdata.org/**"]
-	path = ~/.gitconfig-cloudflare
 
 [interactive]
 	diffFilter = delta --color-only

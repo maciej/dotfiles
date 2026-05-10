@@ -272,11 +272,6 @@ fi
 if [[ -o interactive ]]; then
   alias cy='codex --yolo'
 
-  if command -v opencode >/dev/null 2>&1; then
-    alias tokenmaxxing-opencode='opencode stats | rg -A10 -B1 "COST & TOKENS"'
-  fi
-fi
-
 if [[ -f "$HOME/.zshrc.local" ]]; then
   # shellcheck source=/dev/null
   source "$HOME/.zshrc.local"
