@@ -271,6 +271,7 @@ fi
 # Local, machine-specific overrides.
 if [[ -o interactive ]]; then
   alias cy='codex --yolo'
+fi
 
 if [[ -f "$HOME/.zshrc.local" ]]; then
   # shellcheck source=/dev/null
