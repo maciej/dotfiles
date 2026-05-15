@@ -268,6 +268,10 @@ if [[ -d "$JETBRAINS_APP_PATH" ]]; then
   export PATH
 fi
 
+export PNPM_HOME="$HOME/Library/pnpm"
+path=(${path:#$PNPM_HOME/bin} "$PNPM_HOME/bin")
+export PATH
+
 # Local, machine-specific overrides.
 if [[ -o interactive ]]; then
   alias cy='codex --yolo'
