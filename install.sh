@@ -25,6 +25,7 @@ PRECREATED_STOW_DIRECTORIES=(
 # shellcheck disable=SC3030
 BREW_PACKAGES=(
   tmux
+  cloudflared
   fish
   bat
   helix
@@ -74,6 +75,7 @@ BREW_CASKS=(
   ghostty
   kitty
   font-jetbrains-mono
+  obsidian
   zed
 )
 
