@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "model": "opus",
+  "theme": "dark",
+  "skipAutoPermissionPrompt": true,
+  "skipDangerousModePermissionPrompt": true,
+  "effortLevel": "high"
+}
