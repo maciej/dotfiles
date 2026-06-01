@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=../install.sh
+source "${ROOT_DIR}/install.sh"
+
+assert_file_equals() {
+  local file="$1"
+  local expected="$2"
+  local actual
+
+  actual="$(cat "${file}")"
+  if [[ "${actual}" != "${expected}" ]]; then
+    printf "Expected %s to contain:\n%s\n\nActual:\n%s\n" "${file}" "${expected}" "${actual}" >&2
+    return 1
+  fi
+}
+
+with_temp_home() {
+  local test_name="$1"
+  shift
+
+  local temp_home
+  temp_home="$(mktemp -d)"
+  trap 'rm -rf "${temp_home}"' RETURN
+  HOME="${temp_home}" SSH_CONFIG_INCLUDE_PATTERN="${temp_home}/.ssh/config.d/*.conf" "$@"
+  rm -rf "${temp_home}"
+  trap - RETURN
+  printf "ok - %s\n" "${test_name}"
+}
+
+test_creates_missing_config() {
+  local old_umask
+
+  old_umask="$(umask)"
+  ensure_ssh_config_fragment_directory
+  ensure_ssh_config_include
+
+  assert_file_equals "${HOME}/.ssh/config" "Include ${SSH_CONFIG_INCLUDE_PATTERN}"
+  [[ "$(umask)" == "${old_umask}" ]]
+}
+
+test_inserts_before_first_host() {
+  ensure_ssh_config_fragment_directory
+  cat >"${HOME}/.ssh/config" <<'EOF'
+CanonicalizeHostname yes
+
+Host example
+  User local
+EOF
+
+  ensure_ssh_config_include
+
+  assert_file_equals "${HOME}/.ssh/config" "CanonicalizeHostname yes
+
+Include ${SSH_CONFIG_INCLUDE_PATTERN}
+Host example
+  User local"
+}
+
+test_appends_without_host_blocks() {
+  ensure_ssh_config_fragment_directory
+  cat >"${HOME}/.ssh/config" <<'EOF'
+CanonicalizeHostname yes
+HashKnownHosts yes
+EOF
+
+  ensure_ssh_config_include
+
+  assert_file_equals "${HOME}/.ssh/config" "CanonicalizeHostname yes
+HashKnownHosts yes
+Include ${SSH_CONFIG_INCLUDE_PATTERN}"
+}
+
+test_is_idempotent() {
+  ensure_ssh_config_fragment_directory
+  printf "Include %s\n" "${SSH_CONFIG_INCLUDE_PATTERN}" >"${HOME}/.ssh/config"
+
+  ensure_ssh_config_include
+  ensure_ssh_config_include
+
+  assert_file_equals "${HOME}/.ssh/config" "Include ${SSH_CONFIG_INCLUDE_PATTERN}"
+}
+
+test_ssh_reads_included_fragment() {
+  command -v ssh >/dev/null 2>&1 || {
+    printf "skip - ssh is unavailable\n"
+    return
+  }
+
+  ensure_ssh_config_fragment_directory
+  cat >"${HOME}/.ssh/config.d/git-maciejb-me.conf" <<'EOF'
+Host git.maciejb.me
+  User git
+  Port 2222
+EOF
+  cat >"${HOME}/.ssh/config" <<'EOF'
+Host *
+  User fallback
+EOF
+
+  ensure_ssh_config_include
+
+  local rendered
+  rendered="$(ssh -F "${HOME}/.ssh/config" -G git.maciejb.me 2>/dev/null)"
+  grep -qx "user git" <<<"${rendered}"
+  grep -qx "port 2222" <<<"${rendered}"
+}
+
+with_temp_home "creates missing config" test_creates_missing_config
+with_temp_home "inserts before first host" test_inserts_before_first_host
+with_temp_home "appends without host blocks" test_appends_without_host_blocks
+with_temp_home "is idempotent" test_is_idempotent
+with_temp_home "ssh reads included fragment" test_ssh_reads_included_fragment

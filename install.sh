@@ -8,6 +8,8 @@ SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
 UPGRADE=false
 SYNC_ZED_SETTINGS=false
 LOCAL_INSTALL=false
+SCRIPT_SOURCED=false
+(return 0 2>/dev/null) && SCRIPT_SOURCED=true
 
 # Paths that used to be stowed into $HOME but are no longer present in the repo.
 LEGACY_STOW_PATHS=(
@@ -285,11 +287,13 @@ bootstrap() {
   esac
 }
 
-parse_args "$@"
-if [[ "${LOCAL_INSTALL}" != "true" ]]; then
-  ensure_macos_command_line_tools
+if [[ "${SCRIPT_SOURCED}" != "true" ]]; then
+  parse_args "$@"
+  if [[ "${LOCAL_INSTALL}" != "true" ]]; then
+    ensure_macos_command_line_tools
+  fi
+  bootstrap "$@"
 fi
-bootstrap "$@"
 
 ensure_brew() {
   if command -v brew >/dev/null 2>&1; then
@@ -1101,6 +1105,86 @@ ensure_precreated_stow_directories() {
   done
 }
 
+ensure_ssh_config_fragment_directory() {
+  local include_dir="${HOME}/.ssh/config.d"
+  local ssh_dir="${HOME}/.ssh"
+
+  if [[ -e "${ssh_dir}" && ! -d "${ssh_dir}" ]]; then
+    log "SSH path exists but is not a directory: ${ssh_dir}"
+    return 1
+  fi
+
+  mkdir -p "${include_dir}"
+  chmod 700 "${ssh_dir}" "${include_dir}"
+  log "Ensured SSH config fragment directory exists: ${include_dir}"
+}
+
+ssh_config_has_include() {
+  local config_file="$1"
+  local include_pattern="$2"
+
+  awk -v include_pattern="${include_pattern}" '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*Include[[:space:]]/ {
+      for (i = 2; i <= NF; i++) {
+        if ($i == include_pattern) {
+          found = 1
+        }
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' "${config_file}"
+}
+
+ensure_ssh_config_include() {
+  local config_file="${HOME}/.ssh/config"
+  local include_pattern="${SSH_CONFIG_INCLUDE_PATTERN:-~/.ssh/config.d/*.conf}"
+  local include_line="Include ${include_pattern}"
+  local old_umask
+  local temp_file
+
+  mkdir -p "${HOME}/.ssh"
+  chmod 700 "${HOME}/.ssh"
+
+  if [[ ! -e "${config_file}" ]]; then
+    old_umask="$(umask)"
+    umask 077
+    printf "%s\n" "${include_line}" >"${config_file}"
+    umask "${old_umask}"
+    log "Created SSH config with fragment include: ${config_file}"
+    return
+  fi
+
+  if [[ ! -f "${config_file}" ]]; then
+    log "SSH config exists but is not a regular file: ${config_file}"
+    return 1
+  fi
+
+  if ssh_config_has_include "${config_file}" "${include_pattern}"; then
+    log "SSH config already includes fragments: ${include_pattern}"
+    return
+  fi
+
+  temp_file="$(mktemp "${config_file}.tmp.XXXXXX")"
+  awk -v include_line="${include_line}" '
+    BEGIN { inserted = 0 }
+    !inserted && /^[[:space:]]*(Host|Match)([[:space:]]|$)/ {
+      print include_line
+      inserted = 1
+    }
+    { print }
+    END {
+      if (!inserted) {
+        print include_line
+      }
+    }
+  ' "${config_file}" >"${temp_file}"
+
+  cat "${temp_file}" >"${config_file}"
+  rm -f "${temp_file}"
+  log "Added SSH config fragment include: ${include_pattern}"
+}
+
 link_dotfiles() {
   if command -v stow >/dev/null 2>&1; then
     local restow="${DOTFILES_STOW_RESTOW:-false}"
@@ -1187,7 +1271,9 @@ local_install() {
   validate_legacy_stow_targets
   remove_legacy_stow_targets
   ensure_precreated_stow_directories
+  ensure_ssh_config_fragment_directory
   link_dotfiles
+  ensure_ssh_config_include
   if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
     sync_zed_settings
   else
@@ -1226,7 +1312,9 @@ main() {
   validate_legacy_stow_targets
   remove_legacy_stow_targets
   ensure_precreated_stow_directories
+  ensure_ssh_config_fragment_directory
   link_dotfiles
+  ensure_ssh_config_include
   rebuild_bat_cache
   if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
     sync_zed_settings
@@ -1235,4 +1323,6 @@ main() {
   fi
 }
 
-main "$@"
+if [[ "${SCRIPT_SOURCED}" != "true" ]]; then
+  main "$@"
+fi

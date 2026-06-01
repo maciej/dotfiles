@@ -17,5 +17,8 @@
 ## Git
 - Escape backticks in shell-quoted git commit messages, or avoid them entirely, so the shell does not perform command substitution.
 
+## Tests
+- Run `make test` from the repo root to execute the regression suite after changes.
+
 ## Privacy
 - Do not include or repeat real machine or host names in tracked files, comments, docs, commit messages, GitHub issues, issue comments, or AGENT-facing instructions. Use generic labels such as `macOS host`, `Linux host`, or `Raspberry Pi`.
