@@ -7,6 +7,7 @@ DOTFILES_DIR="${DOTFILES_DIR:-${HOME}/.dotfiles}"
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
 UPGRADE=false
 SYNC_ZED_SETTINGS=false
+LOCAL_INSTALL=false
 
 # Paths that used to be stowed into $HOME but are no longer present in the repo.
 LEGACY_STOW_PATHS=(
@@ -197,11 +198,14 @@ ensure_macos_command_line_tools() {
 
 print_help() {
   cat <<EOF
-Usage: install.sh [--upgrade] [--sync-zed-settings] [--help]
+Usage: install.sh [--local] [--upgrade] [--sync-zed-settings] [--help]
 
 Install dotfiles packages and link configuration files.
 
 Options:
+  --local              Link dotfiles and install user-local tools only. This
+                       currently installs Helix into ~/.local/bin and does not
+                       install packages or modify system state.
   --upgrade            On Linux, upgrade Helix and uv when they are managed by
                        the non-apt installer path. Does not run apt upgrade or
                        brew upgrade.
@@ -214,6 +218,9 @@ EOF
 parse_args() {
   while (( $# > 0 )); do
     case "$1" in
+      --local)
+        LOCAL_INSTALL=true
+        ;;
       --upgrade)
         UPGRADE=true
         ;;
@@ -278,7 +285,9 @@ bootstrap() {
 }
 
 parse_args "$@"
-ensure_macos_command_line_tools
+if [[ "${LOCAL_INSTALL}" != "true" ]]; then
+  ensure_macos_command_line_tools
+fi
 bootstrap "$@"
 
 ensure_brew() {
@@ -606,34 +615,58 @@ install_helix_linux_via_snap() {
   log "Linked Helix snap launcher into ${helix_bin}"
 }
 
-install_helix_linux() {
+resolve_helix_release_asset() {
+  local asset_pattern="$1"
+  local __url_var="$2"
+  local __name_var="$3"
+  local __size_var="$4"
+  local asset_name asset_size_bytes asset_url latest_url release_json tag
+
+  release_json="$(curl -fsSL https://api.github.com/repos/helix-editor/helix/releases/latest)" || return 1
+
+  if command -v jq >/dev/null 2>&1; then
+    read -r asset_url asset_name asset_size_bytes < <(
+      jq -r --arg pattern "${asset_pattern}" '.assets[] | select(.name | endswith($pattern)) | [.browser_download_url, .name, (.size | tostring)] | @tsv' \
+        <<<"${release_json}" \
+        | head -n 1
+    )
+  else
+    asset_url="$(
+      grep -F '"browser_download_url":' <<<"${release_json}" \
+        | grep -F "${asset_pattern}" \
+        | sed -nE 's/.*"browser_download_url": "([^"]+)".*/\1/p' \
+        | head -n 1 \
+        || true
+    )"
+    asset_name="${asset_url##*/}"
+    asset_size_bytes=""
+  fi
+
+  if [[ -z "${asset_url}" ]]; then
+    latest_url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/helix-editor/helix/releases/latest || true)"
+    tag="${latest_url##*/}"
+    if [[ -n "${tag}" && "${tag}" != "latest" ]]; then
+      asset_name="helix-${tag}-${asset_pattern}"
+      asset_url="https://github.com/helix-editor/helix/releases/download/${tag}/${asset_name}"
+      asset_size_bytes=""
+    fi
+  fi
+
+  printf -v "${__url_var}" '%s' "${asset_url}"
+  printf -v "${__name_var}" '%s' "${asset_name}"
+  printf -v "${__size_var}" '%s' "${asset_size_bytes}"
+}
+
+install_helix_from_release_asset() {
+  local asset_pattern="$1"
+  local local_only="${2:-false}"
   local helix_bin="${HOME}/.local/bin/hx"
-  local arch asset_name asset_pattern asset_size_bytes asset_url extracted_dir tarball tmp_dir
+  local asset_name asset_size_bytes asset_url extracted_dir tarball tmp_dir
   local installed=false
 
-  arch="$(uname -m 2>/dev/null || true)"
-  case "${arch}" in
-    aarch64|arm64)
-      asset_pattern="aarch64-linux.tar.xz"
-      ;;
-    x86_64|amd64)
-      asset_pattern="x86_64-linux.tar.xz"
-      ;;
-    armv6l|armv7l|armhf)
-      if is_raspbian_host; then
-        install_helix_linux_via_snap
-      else
-        log "No official Helix Linux release is available for ${arch}; skipping Helix installation"
-      fi
-      return
-      ;;
-    *)
-      log "Unsupported Helix Linux architecture (${arch:-unknown}); skipping Helix installation"
-      return
-      ;;
-  esac
-
-  if command -v hx >/dev/null 2>&1 || [[ -x "${helix_bin}" ]]; then
+  if [[ -x "${helix_bin}" ]]; then
+    installed=true
+  elif [[ "${local_only}" != "true" ]] && command -v hx >/dev/null 2>&1; then
     installed=true
   fi
 
@@ -646,23 +679,15 @@ install_helix_linux() {
     log "Helix installer requires curl"
     return 1
   }
-  command -v jq >/dev/null 2>&1 || {
-    log "Helix installer requires jq"
-    return 1
-  }
   command -v tar >/dev/null 2>&1 || {
     log "Helix installer requires tar"
     return 1
   }
 
-  read -r asset_url asset_name asset_size_bytes < <(
-    curl -fsSL https://api.github.com/repos/helix-editor/helix/releases/latest \
-      | jq -r --arg pattern "${asset_pattern}" '.assets[] | select(.name | endswith($pattern)) | [.browser_download_url, .name, (.size | tostring)] | @tsv' \
-      | head -n 1
-  )
+  resolve_helix_release_asset "${asset_pattern}" asset_url asset_name asset_size_bytes
 
   if [[ -z "${asset_url}" ]]; then
-    log "Could not find an official Helix release asset for ${arch}"
+    log "Could not find an official Helix release asset matching ${asset_pattern}"
     return 1
   fi
 
@@ -698,6 +723,62 @@ install_helix_linux() {
   else
     log "Installed Helix from official release asset"
   fi
+}
+
+install_helix_linux() {
+  local arch asset_pattern
+
+  arch="$(uname -m 2>/dev/null || true)"
+  case "${arch}" in
+    aarch64|arm64)
+      asset_pattern="aarch64-linux.tar.xz"
+      ;;
+    x86_64|amd64)
+      asset_pattern="x86_64-linux.tar.xz"
+      ;;
+    armv6l|armv7l|armhf)
+      if is_raspbian_host; then
+        install_helix_linux_via_snap
+      else
+        log "No official Helix Linux release is available for ${arch}; skipping Helix installation"
+      fi
+      return
+      ;;
+    *)
+      log "Unsupported Helix Linux architecture (${arch:-unknown}); skipping Helix installation"
+      return
+      ;;
+  esac
+
+  install_helix_from_release_asset "${asset_pattern}"
+}
+
+install_helix_local() {
+  local arch asset_pattern os
+
+  os="$(uname -s 2>/dev/null || true)"
+  arch="$(uname -m 2>/dev/null || true)"
+
+  case "${os}:${arch}" in
+    Darwin:arm64|Darwin:aarch64)
+      asset_pattern="aarch64-macos.tar.xz"
+      ;;
+    Darwin:x86_64|Darwin:amd64)
+      asset_pattern="x86_64-macos.tar.xz"
+      ;;
+    Linux:aarch64|Linux:arm64)
+      asset_pattern="aarch64-linux.tar.xz"
+      ;;
+    Linux:x86_64|Linux:amd64)
+      asset_pattern="x86_64-linux.tar.xz"
+      ;;
+    *)
+      log "No official user-local Helix release is available for ${os:-unknown}/${arch:-unknown}; skipping Helix installation"
+      return
+      ;;
+  esac
+
+  install_helix_from_release_asset "${asset_pattern}" true
 }
 
 install_uv_tools() {
@@ -1096,9 +1177,30 @@ rebuild_bat_cache() {
   "${bat_cmd}" cache --build
 }
 
+local_install() {
+  ensure_user_local_bin_on_path
+
+  install_helix_local
+
+  validate_legacy_stow_targets
+  remove_legacy_stow_targets
+  ensure_precreated_stow_directories
+  link_dotfiles
+  if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
+    sync_zed_settings
+  else
+    log "Skipping Zed settings sync by default; pass --sync-zed-settings to enable it"
+  fi
+}
+
 main() {
   local os
   os="$(uname -s 2>/dev/null || true)"
+
+  if [[ "${LOCAL_INSTALL}" == "true" ]]; then
+    local_install
+    return
+  fi
 
   ensure_user_local_bin_on_path
 

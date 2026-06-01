@@ -23,6 +23,17 @@ To also regenerate the live Zed settings during install, pass:
 curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | bash -s -- --sync-zed-settings 2>&1 | tee ~/install.log
 ```
 
+To link dotfiles and install only user-local tools without package manager or
+system changes, pass:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | bash -s -- --local 2>&1 | tee ~/install.log
+```
+
+The local install currently installs Helix from the upstream release archive into
+`~/.local/bin/hx`, copies its runtime into `~/.config/helix/runtime`, and links
+dotfiles with Stow.
+
 This repo also keeps a pinned snapshot of vendored Obsidian skills under `vendor/obsidian-skills/`, with source metadata and the allowlist in `vendor/obsidian-skills.manifest`. Those files are kept in the repo for review and manual use, but `install.sh` does not install them automatically.
 
 If you want to install the allowlisted vendored skills into `~/.codex/skills` manually, run:
