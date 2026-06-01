@@ -4,6 +4,9 @@ typeset -gU path PATH
 # Opt out of GitHub CLI telemetry.
 export GH_TELEMETRY=false
 
+# Enable Claude Code auto mode.
+export CLAUDE_CODE_ENABLE_AUTO_MODE=1
+
 ensure_preferred_path_order() {
   local dir
   local -a preferred_path
