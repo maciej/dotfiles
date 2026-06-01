@@ -620,48 +620,49 @@ resolve_helix_release_asset() {
   local __url_var="$2"
   local __name_var="$3"
   local __size_var="$4"
-  local asset_name asset_size_bytes asset_url latest_url release_json tag
+  local resolved_asset_name="" resolved_asset_size_bytes="" resolved_asset_url=""
+  local latest_url="" release_json tag=""
 
   release_json="$(curl -fsSL https://api.github.com/repos/helix-editor/helix/releases/latest)" || return 1
 
   if command -v jq >/dev/null 2>&1; then
-    read -r asset_url asset_name asset_size_bytes < <(
+    read -r resolved_asset_url resolved_asset_name resolved_asset_size_bytes < <(
       jq -r --arg pattern "${asset_pattern}" '.assets[] | select(.name | endswith($pattern)) | [.browser_download_url, .name, (.size | tostring)] | @tsv' \
         <<<"${release_json}" \
         | head -n 1
     )
   else
-    asset_url="$(
+    resolved_asset_url="$(
       grep -F '"browser_download_url":' <<<"${release_json}" \
         | grep -F "${asset_pattern}" \
         | sed -nE 's/.*"browser_download_url": "([^"]+)".*/\1/p' \
         | head -n 1 \
         || true
     )"
-    asset_name="${asset_url##*/}"
-    asset_size_bytes=""
+    resolved_asset_name="${resolved_asset_url##*/}"
+    resolved_asset_size_bytes=""
   fi
 
-  if [[ -z "${asset_url}" ]]; then
+  if [[ -z "${resolved_asset_url}" ]]; then
     latest_url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/helix-editor/helix/releases/latest || true)"
     tag="${latest_url##*/}"
     if [[ -n "${tag}" && "${tag}" != "latest" ]]; then
-      asset_name="helix-${tag}-${asset_pattern}"
-      asset_url="https://github.com/helix-editor/helix/releases/download/${tag}/${asset_name}"
-      asset_size_bytes=""
+      resolved_asset_name="helix-${tag}-${asset_pattern}"
+      resolved_asset_url="https://github.com/helix-editor/helix/releases/download/${tag}/${resolved_asset_name}"
+      resolved_asset_size_bytes=""
     fi
   fi
 
-  printf -v "${__url_var}" '%s' "${asset_url}"
-  printf -v "${__name_var}" '%s' "${asset_name}"
-  printf -v "${__size_var}" '%s' "${asset_size_bytes}"
+  printf -v "${__url_var}" '%s' "${resolved_asset_url}"
+  printf -v "${__name_var}" '%s' "${resolved_asset_name}"
+  printf -v "${__size_var}" '%s' "${resolved_asset_size_bytes}"
 }
 
 install_helix_from_release_asset() {
   local asset_pattern="$1"
   local local_only="${2:-false}"
   local helix_bin="${HOME}/.local/bin/hx"
-  local asset_name asset_size_bytes asset_url extracted_dir tarball tmp_dir
+  local asset_name="" asset_size_bytes="" asset_url="" extracted_dir="" tarball="" tmp_dir=""
   local installed=false
 
   if [[ -x "${helix_bin}" ]]; then
