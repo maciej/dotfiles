@@ -65,6 +65,7 @@ APT_PACKAGES=(
 
 # Install non-preview cask apps
 BREW_CASKS=(
+  brave-browser
   codex
   ghostty
   kitty
