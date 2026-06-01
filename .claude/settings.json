@@ -6,5 +6,9 @@
   "theme": "dark",
   "skipAutoPermissionPrompt": true,
   "skipDangerousModePermissionPrompt": true,
-  "effortLevel": "high"
+  "effortLevel": "high",
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  }
 }
