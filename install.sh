@@ -65,6 +65,8 @@ APT_PACKAGES=(
 
 # Install non-preview cask apps
 BREW_CASKS=(
+  codex
+  ghostty
   kitty
   font-jetbrains-mono
   zed
