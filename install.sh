@@ -164,6 +164,34 @@ ensure_user_local_bin_on_path() {
   esac
 }
 
+ensure_macos_command_line_tools() {
+  local install_output install_status os
+
+  os="$(uname -s 2>/dev/null || true)"
+  [[ "${os}" == "Darwin" ]] || return 0
+
+  if xcode-select -p >/dev/null 2>&1; then
+    log "Xcode Command Line Tools already available"
+    return 0
+  fi
+
+  if ! command -v xcode-select >/dev/null 2>&1; then
+    log "xcode-select is missing. Install Xcode Command Line Tools manually, then rerun this installer."
+    exit 1
+  fi
+
+  log "Xcode Command Line Tools are required before bootstrapping dotfiles"
+  install_output="$(xcode-select --install 2>&1)" && install_status=0 || install_status=$?
+  if [[ "${install_status}" -eq 0 ]] || grep -Eqi 'install requested|already installed|currently being installed' <<<"${install_output}"; then
+    log "Complete the Xcode Command Line Tools installer, then rerun this installer."
+    exit 1
+  fi
+
+  log "Could not trigger Xcode Command Line Tools installation automatically."
+  log "Run xcode-select --install manually, complete the installer, then rerun this installer."
+  exit 1
+}
+
 print_help() {
   cat <<EOF
 Usage: install.sh [--upgrade] [--sync-zed-settings] [--help]
@@ -247,6 +275,7 @@ bootstrap() {
 }
 
 parse_args "$@"
+ensure_macos_command_line_tools
 bootstrap "$@"
 
 ensure_brew() {
@@ -992,6 +1021,7 @@ link_dotfiles() {
     local adopt="${DOTFILES_STOW_ADOPT:-false}"
     local -a flags=(
       -v
+      --no-folding
       --target="${HOME}"
       --dir="${DOTFILES_DIR}"
     )

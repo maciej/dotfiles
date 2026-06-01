@@ -3,6 +3,7 @@
 ^/install\.sh$
 ^/deploy\.sh$
 ^/\.git$
+^/\.idea$
 ^/AGENTS\.md$
 ^/\.config/zed/settings\.json$
 ^/scripts$
