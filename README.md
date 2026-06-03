@@ -32,16 +32,9 @@ curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | b
 
 The local install currently installs Helix from the upstream release archive into
 `~/.local/bin/hx`, copies its runtime into `~/.config/helix/runtime`, and links
-dotfiles with Stow.
-
-This repo also keeps a pinned snapshot of vendored Obsidian skills under `vendor/obsidian-skills/`, with source metadata and the allowlist in `vendor/obsidian-skills.manifest`. Those files are kept in the repo for review and manual use, but `install.sh` does not install them automatically.
-
-If you want to install the allowlisted vendored skills into `~/.codex/skills` manually, run:
-
-```sh
-cd ~/.dotfiles
-./scripts/install-obsidian-skills
-```
+dotfiles with Stow. Obsidian skills are tracked directly under
+`.codex/skills/`, so Stow links them into `~/.codex/skills` with the rest of the
+dotfiles.
 
 ### Link dotfiles with Stow
 
