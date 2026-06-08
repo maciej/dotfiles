@@ -26,10 +26,15 @@ with_temp_home() {
   local temp_home
   temp_home="$(mktemp -d)"
   trap 'rm -rf "${temp_home}"' RETURN
-  HOME="${temp_home}" SSH_CONFIG_INCLUDE_PATTERN="${temp_home}/.ssh/config.d/*.conf" "$@"
+  HOME="${temp_home}" XDG_CONFIG_HOME= SSH_CONFIG_INCLUDE_PATTERN="${temp_home}/.ssh/config.d/*.conf" "$@"
   rm -rf "${temp_home}"
   trap - RETURN
   printf "ok - %s\n" "${test_name}"
+}
+
+reset_local_install_state() {
+  LOCAL_INSTALL=false
+  LOCAL_INSTALL_CHOICE=auto
 }
 
 test_creates_missing_config() {
@@ -110,8 +115,68 @@ EOF
   grep -qx "port 2222" <<<"${rendered}"
 }
 
+test_local_install_marker_uses_xdg_config_home() {
+  reset_local_install_state
+  XDG_CONFIG_HOME="${HOME}/xdg-config"
+
+  [[ "$(local_install_marker_path)" == "${HOME}/xdg-config/dotfiles/install-mode" ]]
+}
+
+test_local_install_marker_defaults_to_home_config() {
+  reset_local_install_state
+  unset XDG_CONFIG_HOME
+
+  [[ "$(local_install_marker_path)" == "${HOME}/.config/dotfiles/install-mode" ]]
+}
+
+test_local_install_marker_enables_local_default() {
+  local marker
+  reset_local_install_state
+  marker="$(local_install_marker_path)"
+  mkdir -p "$(dirname "${marker}")"
+  printf "local\n" >"${marker}"
+
+  parse_args
+  apply_local_install_default
+
+  [[ "${LOCAL_INSTALL}" == "true" ]]
+}
+
+test_explicit_local_writes_marker() {
+  local marker
+  reset_local_install_state
+  marker="$(local_install_marker_path)"
+
+  parse_args --local
+  apply_local_install_default
+  update_local_install_default_marker
+
+  [[ "${LOCAL_INSTALL}" == "true" ]]
+  assert_file_equals "${marker}" "local"
+}
+
+test_no_local_clears_marker() {
+  local marker
+  reset_local_install_state
+  marker="$(local_install_marker_path)"
+  mkdir -p "$(dirname "${marker}")"
+  printf "local\n" >"${marker}"
+
+  parse_args --no-local
+  apply_local_install_default
+  update_local_install_default_marker
+
+  [[ "${LOCAL_INSTALL}" == "false" ]]
+  [[ ! -e "${marker}" ]]
+}
+
 with_temp_home "creates missing config" test_creates_missing_config
 with_temp_home "inserts before first host" test_inserts_before_first_host
 with_temp_home "appends without host blocks" test_appends_without_host_blocks
 with_temp_home "is idempotent" test_is_idempotent
 with_temp_home "ssh reads included fragment" test_ssh_reads_included_fragment
+with_temp_home "local install marker uses XDG_CONFIG_HOME" test_local_install_marker_uses_xdg_config_home
+with_temp_home "local install marker defaults to HOME config" test_local_install_marker_defaults_to_home_config
+with_temp_home "local install marker enables local default" test_local_install_marker_enables_local_default
+with_temp_home "explicit local writes marker" test_explicit_local_writes_marker
+with_temp_home "no local clears marker" test_no_local_clears_marker

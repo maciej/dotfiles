@@ -30,6 +30,10 @@ system changes, pass:
 curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | bash -s -- --local 2>&1 | tee ~/install.log
 ```
 
+Passing `--local` writes `${XDG_CONFIG_HOME:-~/.config}/dotfiles/install-mode`,
+so future installs on that host default to local mode. Pass `--no-local` to run
+a full install again and remove that marker.
+
 The local install currently installs Helix from the upstream release archive into
 `~/.local/bin/hx`, copies its runtime into `~/.config/helix/runtime`, and links
 dotfiles with Stow. Obsidian skills are tracked directly under

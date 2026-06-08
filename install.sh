@@ -8,6 +8,7 @@ SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
 UPGRADE=false
 SYNC_ZED_SETTINGS=false
 LOCAL_INSTALL=false
+LOCAL_INSTALL_CHOICE=auto
 SCRIPT_SOURCED=false
 (return 0 2>/dev/null) && SCRIPT_SOURCED=true
 
@@ -203,14 +204,17 @@ ensure_macos_command_line_tools() {
 
 print_help() {
   cat <<EOF
-Usage: install.sh [--local] [--upgrade] [--sync-zed-settings] [--help]
+Usage: install.sh [--local] [--no-local] [--upgrade] [--sync-zed-settings] [--help]
 
 Install dotfiles packages and link configuration files.
 
 Options:
   --local              Link dotfiles and install user-local tools only. This
                        currently installs Helix into ~/.local/bin and does not
-                       install packages or modify system state.
+                       install packages or modify system state. Also remember
+                       this as the default for future installs on this host.
+  --no-local           Run a full install even when the local-install default
+                       marker exists, and remove that marker.
   --upgrade            On Linux, upgrade Helix and uv when they are managed by
                        the non-apt installer path. Does not run apt upgrade or
                        brew upgrade.
@@ -225,6 +229,11 @@ parse_args() {
     case "$1" in
       --local)
         LOCAL_INSTALL=true
+        LOCAL_INSTALL_CHOICE=local
+        ;;
+      --no-local)
+        LOCAL_INSTALL=false
+        LOCAL_INSTALL_CHOICE=system
         ;;
       --upgrade)
         UPGRADE=true
@@ -244,6 +253,72 @@ parse_args() {
     esac
     shift
   done
+}
+
+dotfiles_config_home() {
+  printf '%s\n' "${XDG_CONFIG_HOME:-${HOME}/.config}"
+}
+
+local_install_marker_path() {
+  printf '%s\n' "$(dotfiles_config_home)/dotfiles/install-mode"
+}
+
+clear_local_install_default() {
+  local marker
+  marker="$(local_install_marker_path)"
+
+  if [[ ! -e "${marker}" && ! -L "${marker}" ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "${marker}" && ! -L "${marker}" ]]; then
+    log "Local install marker exists but is not a regular file: ${marker}"
+    return 1
+  fi
+
+  rm -f "${marker}"
+  log "Cleared local install default marker: ${marker}"
+}
+
+remember_local_install_default() {
+  local marker
+  marker="$(local_install_marker_path)"
+
+  mkdir -p "$(dirname "${marker}")"
+  printf "local\n" >"${marker}"
+  chmod 644 "${marker}"
+  log "Remembered local install default in ${marker}"
+}
+
+apply_local_install_default() {
+  local marker
+  marker="$(local_install_marker_path)"
+
+  case "${LOCAL_INSTALL_CHOICE}" in
+    local)
+      LOCAL_INSTALL=true
+      ;;
+    system)
+      LOCAL_INSTALL=false
+      ;;
+    auto)
+      if [[ -f "${marker}" ]]; then
+        LOCAL_INSTALL=true
+        log "Defaulting to --local because ${marker} exists"
+      fi
+      ;;
+  esac
+}
+
+update_local_install_default_marker() {
+  case "${LOCAL_INSTALL_CHOICE}" in
+    local)
+      remember_local_install_default
+      ;;
+    system)
+      clear_local_install_default
+      ;;
+  esac
 }
 
 bootstrap() {
@@ -291,6 +366,8 @@ bootstrap() {
 
 if [[ "${SCRIPT_SOURCED}" != "true" ]]; then
   parse_args "$@"
+  apply_local_install_default
+  update_local_install_default_marker
   if [[ "${LOCAL_INSTALL}" != "true" ]]; then
     ensure_macos_command_line_tools
   fi
