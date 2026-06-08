@@ -1,6 +1,12 @@
 [user]
 	name = Maciej Biłas
 	email = maciej@bilas.io
+[includeIf "hasconfig:remote.*.url:git@github.com:lyskdev/**"]
+	path = ~/.gitconfig-lyskdev
+[includeIf "hasconfig:remote.*.url:ssh://git@github.com/lyskdev/**"]
+	path = ~/.gitconfig-lyskdev
+[includeIf "hasconfig:remote.*.url:https://github.com/lyskdev/**"]
+	path = ~/.gitconfig-lyskdev
 [alias]
 	st = status
 	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
