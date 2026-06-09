@@ -34,6 +34,7 @@ BREW_PACKAGES=(
   git-delta
   fzf
   ripgrep
+  rsync
   zoxide
   gh
   bash
