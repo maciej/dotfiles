@@ -211,14 +211,15 @@ Install dotfiles packages and link configuration files.
 
 Options:
   --local              Link dotfiles and install user-local tools only. This
-                       currently installs Helix into ~/.local/bin and does not
-                       install packages or modify system state. Also remember
-                       this as the default for future installs on this host.
+                       currently installs Helix and Codex CLI into user-local
+                       locations and does not install packages or modify system
+                       state. Also remember this as the default for future
+                       installs on this host.
   --no-local           Run a full install even when the local-install default
                        marker exists, and remove that marker.
-  --upgrade            On Linux, upgrade Helix and uv when they are managed by
-                       the non-apt installer path. Does not run apt upgrade or
-                       brew upgrade.
+  --upgrade            On Linux, upgrade Helix, uv, and Codex CLI when they are
+                       managed by the non-apt installer path. Does not run apt
+                       upgrade or brew upgrade.
   --sync-zed-settings  Regenerate ~/.config/zed/settings.json from the tracked
                        shared settings after linking dotfiles.
   --help               Show this help message and exit.
@@ -635,6 +636,45 @@ install_uv_linux() {
     wget -qO- https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="${HOME}/.local/bin" UV_NO_MODIFY_PATH=1 sh
   else
     log "uv installer requires curl or wget"
+    return 1
+  fi
+
+  ensure_user_local_bin_on_path
+}
+
+install_codex_cli_local() {
+  local codex_bin="${HOME}/.local/bin/codex"
+  local installed=false
+
+  ensure_user_local_bin_on_path
+
+  if [[ -x "${codex_bin}" ]]; then
+    installed=true
+  fi
+
+  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
+    log "Codex CLI already installed"
+    return
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    if [[ "${installed}" == "true" ]]; then
+      log "Upgrading Codex CLI via OpenAI standalone installer"
+    else
+      log "Installing Codex CLI via OpenAI standalone installer"
+    fi
+    curl -fsSL https://chatgpt.com/codex/install.sh \
+      | env CODEX_INSTALL_DIR="${HOME}/.local/bin" CODEX_HOME="${HOME}/.codex" CODEX_NON_INTERACTIVE=1 sh
+  elif command -v wget >/dev/null 2>&1; then
+    if [[ "${installed}" == "true" ]]; then
+      log "Upgrading Codex CLI via OpenAI standalone installer"
+    else
+      log "Installing Codex CLI via OpenAI standalone installer"
+    fi
+    wget -qO- https://chatgpt.com/codex/install.sh \
+      | env CODEX_INSTALL_DIR="${HOME}/.local/bin" CODEX_HOME="${HOME}/.codex" CODEX_NON_INTERACTIVE=1 sh
+  else
+    log "Codex CLI installer requires curl or wget"
     return 1
   fi
 
@@ -1347,6 +1387,7 @@ local_install() {
   ensure_user_local_bin_on_path
 
   install_helix_local
+  install_codex_cli_local
 
   validate_legacy_stow_targets
   remove_legacy_stow_targets

@@ -35,10 +35,11 @@ so future installs on that host default to local mode. Pass `--no-local` to run
 a full install again and remove that marker.
 
 The local install currently installs Helix from the upstream release archive into
-`~/.local/bin/hx`, copies its runtime into `~/.config/helix/runtime`, and links
-dotfiles with Stow. Obsidian skills are tracked directly under
-`.codex/skills/`, so Stow links them into `~/.codex/skills` with the rest of the
-dotfiles.
+`~/.local/bin/hx`, copies its runtime into `~/.config/helix/runtime`, installs
+the Codex CLI standalone package under `~/.codex/packages/standalone` with a
+`~/.local/bin/codex` launcher, and links dotfiles with Stow. Obsidian skills are
+tracked directly under `.codex/skills/`, so Stow links them into
+`~/.codex/skills` with the rest of the dotfiles.
 
 ### Link dotfiles with Stow
 

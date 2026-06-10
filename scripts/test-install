@@ -170,6 +170,40 @@ test_no_local_clears_marker() {
   [[ ! -e "${marker}" ]]
 }
 
+test_codex_local_installer_uses_home_scoped_env() {
+  local capture fake_bin
+
+  UPGRADE=false
+  fake_bin="${HOME}/fake-bin"
+  capture="${HOME}/codex-env"
+  mkdir -p "${fake_bin}"
+
+  cat >"${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '# fake Codex installer\n'
+EOF
+  chmod 755 "${fake_bin}/curl"
+
+  cat >"${fake_bin}/sh" <<'EOF'
+#!/usr/bin/env bash
+while IFS= read -r _line; do
+  :
+done
+{
+  printf 'CODEX_INSTALL_DIR=%s\n' "${CODEX_INSTALL_DIR:-}"
+  printf 'CODEX_HOME=%s\n' "${CODEX_HOME:-}"
+  printf 'CODEX_NON_INTERACTIVE=%s\n' "${CODEX_NON_INTERACTIVE:-}"
+} >"${CODEX_TEST_ENV_CAPTURE:?}"
+EOF
+  chmod 755 "${fake_bin}/sh"
+
+  PATH="${fake_bin}:${PATH}" CODEX_TEST_ENV_CAPTURE="${capture}" install_codex_cli_local
+
+  assert_file_equals "${capture}" "CODEX_INSTALL_DIR=${HOME}/.local/bin
+CODEX_HOME=${HOME}/.codex
+CODEX_NON_INTERACTIVE=1"
+}
+
 with_temp_home "creates missing config" test_creates_missing_config
 with_temp_home "inserts before first host" test_inserts_before_first_host
 with_temp_home "appends without host blocks" test_appends_without_host_blocks
@@ -180,3 +214,4 @@ with_temp_home "local install marker defaults to HOME config" test_local_install
 with_temp_home "local install marker enables local default" test_local_install_marker_enables_local_default
 with_temp_home "explicit local writes marker" test_explicit_local_writes_marker
 with_temp_home "no local clears marker" test_no_local_clears_marker
+with_temp_home "Codex local installer uses home-scoped environment" test_codex_local_installer_uses_home_scoped_env
