@@ -111,3 +111,7 @@ set --export PATH $BUN_INSTALL/bin $PATH
 # pnpm
 set -gx PNPM_HOME "$HOME/Library/pnpm"
 fish_add_path "$PNPM_HOME/bin"
+
+if command -q sag
+    set -gx ELEVENLABS_API_KEY_FILE "$HOME/.config/sag/elevenlabs.key"
+end

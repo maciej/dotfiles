@@ -272,6 +272,35 @@ export PNPM_HOME="$HOME/Library/pnpm"
 path=(${path:#$PNPM_HOME/bin} "$PNPM_HOME/bin")
 export PATH
 
+if (( $+commands[sag] )); then
+  export ELEVENLABS_API_KEY_FILE="${ELEVENLABS_API_KEY_FILE:-$HOME/.config/sag/elevenlabs.key}"
+  typeset -g _sag_command="${commands[sag]}"
+
+  sag() {
+    local key_file="${ELEVENLABS_API_KEY_FILE:-}"
+
+    if [[ -z "${ELEVENLABS_API_KEY:-}" && -z "${SAG_API_KEY:-}" ]]; then
+      if [[ -z "$key_file" ]]; then
+        print -u2 "sag: ELEVENLABS_API_KEY_FILE is not set. Expected $HOME/.config/sag/elevenlabs.key"
+        return 1
+      fi
+
+      if [[ ! -r "$key_file" ]]; then
+        print -u2 "sag: ELEVENLABS_API_KEY_FILE points to a missing or unreadable file: $key_file"
+        return 1
+      fi
+
+      local perms
+      perms="$(stat -f %Lp "$key_file" 2>/dev/null || stat -c %a "$key_file" 2>/dev/null)"
+      if [[ -n "$perms" && ( "${perms[-2]}" != "0" || "${perms[-1]}" != "0" ) ]]; then
+        print -u2 "sag: warning: $key_file permissions are $perms; consider chmod 600 $key_file"
+      fi
+    fi
+
+    command "$_sag_command" "$@"
+  }
+fi
+
 # Local, machine-specific overrides.
 if [[ -o interactive ]]; then
   alias cy='codex --yolo'
