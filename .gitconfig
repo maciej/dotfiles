@@ -1,6 +1,7 @@
 [user]
 	name = Maciej Biłas
 	email = maciej@bilas.io
+	signingkey = ~/.ssh/id_ed25519.pub
 [includeIf "hasconfig:remote.*.url:git@github.com:lyskdev/**"]
 	path = ~/.gitconfig-lyskdev
 [includeIf "hasconfig:remote.*.url:ssh://git@github.com/lyskdev/**"]
@@ -50,9 +51,9 @@
 [difftool "zed"]
 	cmd = zed --wait $LOCAL $REMOTE
 [commit]
-	gpgsign = false
+	gpgsign = true
 [tag]
-	gpgsign = false
+	gpgsign = true
 [merge]
 	conflictStyle = zdiff3
 [branch]
@@ -102,3 +103,7 @@
 		bold cyan => syntax "#4a6475", \
 		bold yellow => syntax "#6a635d"
 	syntax-theme = Catppuccin Macchiato
+[gpg]
+	format = ssh
+[gpg "ssh"]
+	allowedSignersFile = ~/.ssh/allowed_signers
