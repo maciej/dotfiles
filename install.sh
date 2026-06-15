@@ -45,6 +45,11 @@ BREW_PACKAGES=(
   sqlite
   stow
   uv
+  # Useful tools for coding agents to work with PDFs.
+  poppler
+  qpdf
+  tesseract
+  ocrmypdf
 )
 
 # shellcheck disable=SC3030
