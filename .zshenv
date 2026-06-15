@@ -4,6 +4,9 @@ typeset -gU path PATH
 # Opt out of GitHub CLI telemetry.
 export GH_TELEMETRY=false
 
+# Disable Homebrew's default install/upgrade confirmation prompt.
+export HOMEBREW_NO_ASK=1
+
 # Enable Claude Code auto mode.
 export CLAUDE_CODE_ENABLE_AUTO_MODE=1
 
