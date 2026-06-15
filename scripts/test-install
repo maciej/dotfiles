@@ -204,6 +204,15 @@ CODEX_HOME=${HOME}/.codex
 CODEX_NON_INTERACTIVE=1"
 }
 
+test_make_rejects_unknown_install_target() {
+  local output status
+
+  output="$(make -C "${ROOT_DIR}" -n install 2>&1)" && status=0 || status=$?
+
+  [[ "${status}" -ne 0 ]]
+  grep -q "Unknown target(s): install" <<<"${output}"
+}
+
 with_temp_home "creates missing config" test_creates_missing_config
 with_temp_home "inserts before first host" test_inserts_before_first_host
 with_temp_home "appends without host blocks" test_appends_without_host_blocks
@@ -215,3 +224,4 @@ with_temp_home "local install marker enables local default" test_local_install_m
 with_temp_home "explicit local writes marker" test_explicit_local_writes_marker
 with_temp_home "no local clears marker" test_no_local_clears_marker
 with_temp_home "Codex local installer uses home-scoped environment" test_codex_local_installer_uses_home_scoped_env
+with_temp_home "make rejects unknown install target" test_make_rejects_unknown_install_target
