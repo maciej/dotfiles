@@ -1,0 +1,4 @@
+interface:
+  display_name: "Python Plot Styling"
+  short_description: "Style Python plots with Catppuccin"
+  default_prompt: "Use $python-plots-styling to create light and dark Catppuccin-styled Python plots."
