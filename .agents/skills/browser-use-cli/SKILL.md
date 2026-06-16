@@ -1,5 +1,5 @@
 ---
-name: Browser Use CLI
+name: browser-use-cli
 description: Automates browser interactions through the browser-use CLI for web testing, form filling, screenshots, and data extraction. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, or extract information from web pages using terminal commands.
 allowed-tools: Bash(browser-use:*)
 ---

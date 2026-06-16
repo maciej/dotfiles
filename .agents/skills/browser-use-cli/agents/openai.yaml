@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser Use CLI"
+  short_description: "Control browsers from the terminal with browser-use"
+  default_prompt: "Use $browser-use-cli to navigate a site, inspect page state, and interact with elements from the terminal."
