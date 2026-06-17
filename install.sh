@@ -14,7 +14,10 @@ SCRIPT_SOURCED=false
 
 # Paths that used to be stowed into $HOME but are no longer present in the repo.
 LEGACY_STOW_PATHS=(
+  "${HOME}/.agents/skills/gitlab"
   "${HOME}/.agents/skills/browser-use"
+  "${HOME}/.config/opencode/commands/fix-mr.md"
+  "${HOME}/.config/opencode/skills/gitlab"
   "${HOME}/.shell_paths"
 )
 
