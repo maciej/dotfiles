@@ -1,11 +1,9 @@
 # Maciej's dotfiles
 
-Simple dotfiles setup for my machines.
+Dotfiles setup for my machines. Uses GNU stow for linking dotfiles.
+`install.sh`, in addition to calling `stow`, installs software packages I expect on my systems.
 
-### Editor preference
-
-- Local sessions use **Zed** (`zed --wait`) as the default editor.
-- SSH / non-GUI sessions use **Helix** (`hx`) as the terminal fallback (then Vim if Helix is unavailable).
+`toolbox/` contains _personal apps_, vibe-coded Python CLIs.
 
 ## Install
 
@@ -17,11 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | b
 
 By default, the remote bootstrap installs into `~/.dotfiles`. Override with `DOTFILES_DIR` if you prefer a different destination.
 
-To also regenerate the live Zed settings during install, pass:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | bash -s -- --sync-zed-settings 2>&1 | tee ~/install.log
-```
+### Local mode
 
 To link dotfiles and install only user-local tools without package manager or
 system changes, pass:
@@ -34,25 +28,16 @@ Passing `--local` writes `${XDG_CONFIG_HOME:-~/.config}/dotfiles/install-mode`,
 so future installs on that host default to local mode. Pass `--no-local` to run
 a full install again and remove that marker.
 
-The local install currently installs Helix from the upstream release archive into
-`~/.local/bin/hx`, copies its runtime into `~/.config/helix/runtime`, installs
-the Codex CLI standalone package under `~/.codex/packages/standalone` with a
-`~/.local/bin/codex` launcher, and links dotfiles with Stow. Obsidian skills are
-tracked directly under `.codex/skills/`, so Stow links them into
-`~/.codex/skills` with the rest of the dotfiles.
+## Some software choices
 
-### Link dotfiles with Stow
+### Editor
 
-This repo uses [GNU Stow](https://www.gnu.org/software/stow/manual/stow.html) to symlink tracked dotfiles into your home directory.
+- Local sessions use **Zed** (`zed --wait`) as the default editor.
+- SSH / non-GUI sessions use **Helix** (`hx`) as the terminal fallback (then Vim if Helix is unavailable).
 
-```sh
-cd ~/.dotfiles
-stow -v --restow .
-```
+## Details
 
-You can also rerun this command after updates; it is idempotent.
-
-## Zed settings workflow
+### Zed settings workflow
 
 > Note: the current `zed-settings` handling is a workaround for [zed issue 20038](https://github.com/zed-industries/zed/issues/20038), which requests a JSON import/include mechanism (a settings `includes` file list). Revise the script once that feature is implemented.
 
