@@ -86,6 +86,7 @@ BREW_CASKS=(
   kitty
   font-jetbrains-mono
   obsidian
+  vlc
   zed
 )
 
