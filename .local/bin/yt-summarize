@@ -663,6 +663,7 @@ def summarize(text: str, model: str, size: SummarySize, metadata: str, work_dir:
     prompt = f"""Summarize the English transcript below.
 
 {size_instruction(size)}
+Skip sponsored content, advertisements, promos, and ad reads mentioned in the transcript.
 Return only the summary in English. Do not mention that you are an AI model.
 
 Source:
