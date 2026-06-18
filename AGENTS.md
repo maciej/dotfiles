@@ -3,7 +3,7 @@
 ## Dotfiles
 - When searching this repo for files or directories, include dotfiles by default and use tools or flags that do not hide them.
 
-## Dotfiles & Stow
+## Stow
 - This repo is Stow-managed. Only commit paths that should be symlinked into `$HOME` unless they are explicitly ignored.
 - To adopt an existing unmanaged `$HOME` path into this repo, move the file or directory tree into the matching repo path yourself, then run `stow -nv .` and `stow -v .` from the repo root and review `git diff` before committing; do not rely on `stow --adopt` for directories.
 - If you add a repo-only path that should not be stowed into `$HOME` (for example `README` files, helper scripts, repo metadata, or top-level utility directories), add it to `.stow-local-ignore` in the same change.
@@ -13,6 +13,12 @@
 - Do not treat every non-dotfile as ignorable: files inside dot-directories such as `.config/...` are often valid Stow payload and should stay tracked normally.
 - If you remove a previously stowed path from the repo, update `LEGACY_STOW_PATHS` in `install.sh` in the same change.
 - Only keep entries there for paths that are no longer present anywhere in this repo.
+
+## Toolbox
+- `toolbox/` contains Python personal utilities that are repo-owned, tested, and invoked by thin stowed wrappers such as `.local/bin/yt-summarize`.
+- Toolbox Python dependencies are managed with `uv` in `toolbox/pyproject.toml` and `toolbox/uv.lock`.
+- Use Ruff for Python linting. Run `make lint` from the repo root.
+- Use pytest for toolbox tests. Run `make test-python` for just toolbox tests or `make test` for the full repo regression suite.
 
 ## Git
 - Escape backticks in shell-quoted git commit messages, or avoid them entirely, so the shell does not perform command substitution.

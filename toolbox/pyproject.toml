@@ -1,0 +1,24 @@
+[project]
+name = "toolbox"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "rich>=13.7",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+whisper = [
+  "mlx-whisper @ git+https://github.com/maciej/mlx-examples.git@maciej/whisper-beam-search-candidates#subdirectory=whisper",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
+testpaths = ["tests"]
