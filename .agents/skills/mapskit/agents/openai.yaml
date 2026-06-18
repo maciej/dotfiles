@@ -1,0 +1,4 @@
+interface:
+  display_name: "MapsKit"
+  short_description: "Use Google Maps Platform from the terminal"
+  default_prompt: "Use $mapskit to search places, inspect details, or calculate a route with the mapskit CLI."
