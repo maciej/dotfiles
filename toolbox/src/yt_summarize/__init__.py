@@ -14,6 +14,7 @@ import sys
 from enum import Enum
 from pathlib import Path
 from typing import Optional
+from urllib.parse import parse_qs, urlparse
 
 import typer
 from system_dependencies import require_binary
@@ -40,6 +41,7 @@ WHISPER_TRANSCRIBE_MODEL = "mlx-community/whisper-large-v3-turbo"
 WHISPER_TRANSLATE_MODEL = "mlx-community/whisper-medium-mlx"
 CACHE_NAMESPACE = "yt-summarize"
 DEFAULT_MAX_RENDER_WIDTH = 120
+YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 app = typer.Typer(
     add_completion=False,
@@ -82,6 +84,18 @@ def load_info(url: str) -> dict:
     return json.loads(result.stdout)
 
 
+def read_json_dict(path: Path) -> Optional[dict]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        console.print(f"[yellow]Ignoring unreadable cached metadata[/yellow] {path}: {error}")
+        return None
+    if not isinstance(data, dict):
+        console.print(f"[yellow]Ignoring non-object cached metadata[/yellow] {path}")
+        return None
+    return data
+
+
 def default_cache_dir() -> Path:
     xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
     if xdg_cache_home:
@@ -94,17 +108,64 @@ def cache_slug(value: str) -> str:
     return slug or "default"
 
 
+def normalize_youtube_video_id(value: str) -> Optional[str]:
+    video_id = value.strip()
+    if YOUTUBE_VIDEO_ID_RE.fullmatch(video_id):
+        return video_id
+    return None
+
+
+def youtube_video_id_from_url(url: str) -> Optional[str]:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    for prefix in ("www.", "m."):
+        if host.startswith(prefix):
+            host = host.removeprefix(prefix)
+
+    if host in {"youtube.com", "music.youtube.com", "youtube-nocookie.com"}:
+        if parsed.path == "/watch":
+            video_ids = parse_qs(parsed.query).get("v") or []
+            if video_ids:
+                return normalize_youtube_video_id(video_ids[0])
+
+        path_parts = [part for part in parsed.path.split("/") if part]
+        if len(path_parts) >= 2 and path_parts[0] in {"embed", "live", "shorts", "v"}:
+            return normalize_youtube_video_id(path_parts[1])
+
+    if host == "youtu.be":
+        video_id = parsed.path.strip("/").split("/", 1)[0]
+        return normalize_youtube_video_id(video_id)
+
+    return None
+
+
 def video_cache_key(info: dict, url: str) -> str:
     return cache_slug(str(info.get("id") or url))
 
 
-def summary_cache_path(info: dict, url: str, model: str, size: SummarySize, cache_dir: Path) -> Path:
+def summary_cache_path_from_key(video_key: str, model: str, size: SummarySize, cache_dir: Path) -> Path:
     model_slug = cache_slug(model)
-    return cache_dir / f"{video_cache_key(info, url)}-{model_slug}-{size.value}.md"
+    return cache_dir / f"{cache_slug(video_key)}-{model_slug}-{size.value}.md"
+
+
+def summary_cache_path(info: dict, url: str, model: str, size: SummarySize, cache_dir: Path) -> Path:
+    return summary_cache_path_from_key(video_cache_key(info, url), model, size, cache_dir)
+
+
+def transcript_cache_path_from_key(video_key: str, cache_dir: Path) -> Path:
+    return cache_dir / f"{cache_slug(video_key)}-transcript.en.txt"
 
 
 def transcript_cache_path(info: dict, url: str, cache_dir: Path) -> Path:
-    return cache_dir / f"{video_cache_key(info, url)}-transcript.en.txt"
+    return transcript_cache_path_from_key(video_cache_key(info, url), cache_dir)
+
+
+def metadata_cache_path_from_key(video_key: str, cache_dir: Path) -> Path:
+    return cache_dir / f"{cache_slug(video_key)}-metadata.json"
+
+
+def metadata_cache_path(info: dict, url: str, cache_dir: Path) -> Path:
+    return metadata_cache_path_from_key(video_cache_key(info, url), cache_dir)
 
 
 def write_text_atomic(path: Path, text: str) -> None:
@@ -112,6 +173,37 @@ def write_text_atomic(path: Path, text: str) -> None:
     temp_path = path.with_name(f".{path.name}.tmp")
     temp_path.write_text(text + "\n", encoding="utf-8")
     temp_path.replace(path)
+
+
+def write_json_atomic(path: Path, data: dict) -> None:
+    write_text_atomic(path, json.dumps(data, ensure_ascii=False, sort_keys=True))
+
+
+def load_info_with_cache(
+    url: str,
+    cache_dir: Path,
+    *,
+    use_cache: bool,
+    refresh_cache: bool,
+) -> dict:
+    video_id = youtube_video_id_from_url(url)
+    if use_cache and not refresh_cache and video_id:
+        cached_metadata_path = metadata_cache_path_from_key(video_id, cache_dir)
+        if cached_metadata_path.exists():
+            cached_info = read_json_dict(cached_metadata_path)
+            if cached_info is not None:
+                console.print(f"[green]Using cached metadata[/green] {cached_metadata_path}")
+                return cached_info
+
+    require_binary("yt-dlp")
+    info = load_info(url)
+
+    if use_cache:
+        cached_metadata_path = metadata_cache_path(info, url, cache_dir)
+        write_json_atomic(cached_metadata_path, info)
+        console.print(f"[green]Cached metadata[/green] {cached_metadata_path}")
+
+    return info
 
 
 def terminal_width(width_override: Optional[int] = None) -> int:
@@ -225,6 +317,51 @@ def print_summary(summary: str, *, plain: bool, width: Optional[int]) -> None:
     sys.stdout.write(summary.lstrip("\n"))
     if not summary.endswith("\n"):
         sys.stdout.write("\n")
+
+
+def emit_cached_summary(
+    cache_path: Path,
+    cached_transcript_path: Path,
+    *,
+    output_path: Optional[Path],
+    transcript_output: Optional[Path],
+    overwrite: bool,
+    plain: bool,
+    width: Optional[int],
+) -> bool:
+    if not cache_path.exists():
+        return False
+
+    summary = cache_path.read_text(encoding="utf-8").strip()
+    console.print(f"[green]Using cached summary[/green] {cache_path}")
+    print_summary(summary, plain=plain, width=width)
+
+    if transcript_output:
+        if transcript_output.exists() and not overwrite:
+            console.print(
+                f"[yellow]Transcript output already exists; leaving it unchanged[/yellow] {transcript_output}"
+            )
+        elif cached_transcript_path.exists():
+            transcript_output.parent.mkdir(parents=True, exist_ok=True)
+            write_text_atomic(
+                transcript_output,
+                cached_transcript_path.read_text(encoding="utf-8").strip(),
+            )
+            console.print(f"[green]Wrote transcript[/green] {transcript_output}")
+        else:
+            console.print(
+                f"[yellow]No cached transcript available for --transcript-output[/yellow] {cached_transcript_path}"
+            )
+
+    if output_path:
+        if output_path.exists() and not overwrite:
+            console.print(f"[yellow]Output already exists; leaving it unchanged[/yellow] {output_path}")
+            return True
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        write_text_atomic(output_path, summary)
+        console.print(f"[green]Wrote summary[/green] {output_path}")
+
+    return True
 
 
 def is_english_language(language: str) -> bool:
@@ -880,7 +1017,25 @@ def main(
         help="Overwrite existing summary/transcript output files.",
     ),
 ) -> None:
-    require_binary("yt-dlp")
+    output_path = output.with_suffix(".md") if output else None
+    resolved_cache_dir = cache_dir or default_cache_dir()
+
+    if use_cache and not refresh_cache:
+        video_id = youtube_video_id_from_url(url)
+        if video_id:
+            cache_path = summary_cache_path_from_key(video_id, summary_model, size, resolved_cache_dir)
+            cached_transcript_path = transcript_cache_path_from_key(video_id, resolved_cache_dir)
+            if emit_cached_summary(
+                cache_path,
+                cached_transcript_path,
+                output_path=output_path,
+                transcript_output=transcript_output,
+                overwrite=overwrite,
+                plain=plain,
+                width=width,
+            ):
+                return
+
     require_binary("codex", "Install the Codex CLI and make sure it is on PATH.")
 
     temp_context: Optional[tempfile.TemporaryDirectory[str]] = None
@@ -891,45 +1046,30 @@ def main(
         work_dir = Path(temp_context.name)
 
     try:
-        info = load_info(url)
+        info = load_info_with_cache(
+            url,
+            resolved_cache_dir,
+            use_cache=use_cache,
+            refresh_cache=refresh_cache,
+        )
         title = info.get("title") or url
         duration = info.get("duration_string") or info.get("duration") or "unknown"
         channel = info.get("channel") or info.get("uploader") or "unknown"
-        output_path = output.with_suffix(".md") if output else None
         if output_path:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-        resolved_cache_dir = cache_dir or default_cache_dir()
         cache_path = summary_cache_path(info, url, summary_model, size, resolved_cache_dir)
         cached_transcript_path = transcript_cache_path(info, url, resolved_cache_dir)
+        cached_metadata_path = metadata_cache_path(info, url, resolved_cache_dir)
 
-        if use_cache and cache_path.exists() and not refresh_cache:
-            summary = cache_path.read_text(encoding="utf-8").strip()
-            console.print(f"[green]Using cached summary[/green] {cache_path}")
-            print_summary(summary, plain=plain, width=width)
-            if transcript_output:
-                if transcript_output.exists() and not overwrite:
-                    console.print(
-                        f"[yellow]Transcript output already exists; leaving it unchanged[/yellow] {transcript_output}"
-                    )
-                elif cached_transcript_path.exists():
-                    transcript_output.parent.mkdir(parents=True, exist_ok=True)
-                    write_text_atomic(
-                        transcript_output,
-                        cached_transcript_path.read_text(encoding="utf-8").strip(),
-                    )
-                    console.print(f"[green]Wrote transcript[/green] {transcript_output}")
-                else:
-                    console.print(
-                        f"[yellow]No cached transcript available for --transcript-output[/yellow] {cached_transcript_path}"
-                    )
-            if output_path:
-                if output_path.exists() and not overwrite:
-                    console.print(
-                        f"[yellow]Output already exists; leaving it unchanged[/yellow] {output_path}"
-                    )
-                    return
-                write_text_atomic(output_path, summary)
-                console.print(f"[green]Wrote summary[/green] {output_path}")
+        if use_cache and not refresh_cache and emit_cached_summary(
+            cache_path,
+            cached_transcript_path,
+            output_path=output_path,
+            transcript_output=transcript_output,
+            overwrite=overwrite,
+            plain=plain,
+            width=width,
+        ):
             return
 
         if output_path and output_path.exists() and not overwrite:
@@ -941,12 +1081,19 @@ def main(
                 f"{transcript_output} already exists. Pass --overwrite to replace it."
             )
 
-        console.print(
-            Panel.fit(
-                f"[bold]{title}[/bold]\nchannel: {channel}\nduration: {duration}\nsize: {size.value}\nmodel: [cyan]{summary_model}[/cyan]\nsummary cache: {cache_path if use_cache else 'disabled'}\ntranscript cache: {cached_transcript_path if use_cache else 'disabled'}",
-                title="yt-summarize",
-            )
+        panel_body = "\n".join(
+            [
+                f"[bold]{title}[/bold]",
+                f"channel: {channel}",
+                f"duration: {duration}",
+                f"size: {size.value}",
+                f"model: [cyan]{summary_model}[/cyan]",
+                f"summary cache: {cache_path if use_cache else 'disabled'}",
+                f"transcript cache: {cached_transcript_path if use_cache else 'disabled'}",
+                f"metadata cache: {cached_metadata_path if use_cache else 'disabled'}",
+            ]
         )
+        console.print(Panel.fit(panel_body, title="yt-summarize"))
 
         transcript: Optional[str] = None
         transcript_language: Optional[str] = None
@@ -961,6 +1108,7 @@ def main(
             console.print(f"[green]Using cached transcript[/green] {cached_transcript_path}")
 
         if transcript is None and not prefer_whisper:
+            require_binary("yt-dlp")
             transcript, transcript_language, source = find_caption_transcript(
                 url,
                 info,
@@ -969,6 +1117,8 @@ def main(
             )
 
         if transcript is None:
+            if prefer_whisper:
+                require_binary("yt-dlp")
             console.print("[cyan]No usable captions found; falling back to mlx-whisper.[/cyan]")
             transcript, source = whisper_transcript(
                 url,
