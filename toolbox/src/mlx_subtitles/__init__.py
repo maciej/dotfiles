@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from system_dependencies import require_binary
+from whisper_memory import require_whisper_model_memory
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
@@ -37,10 +39,7 @@ console = Console(stderr=True)
 
 
 def require_ffmpeg() -> None:
-    if shutil.which("ffmpeg") is None:
-        raise typer.BadParameter(
-            "ffmpeg is required but was not found on PATH. Install it with: brew install ffmpeg"
-        )
+    require_binary("ffmpeg")
 
 
 def get_media_duration(path: Path) -> Optional[float]:
@@ -266,6 +265,8 @@ def main(
         )
     if max_line_count and not max_line_width:
         raise typer.BadParameter("--max-line-count requires --max-line-width.")
+
+    require_whisper_model_memory(model)
 
     console.print(
         Panel.fit(

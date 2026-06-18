@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from system_dependencies import require_binary
+from whisper_memory import require_whisper_model_memory
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -56,13 +58,6 @@ class SummarySize(str, Enum):
 class WhisperTask(str, Enum):
     transcribe = "transcribe"
     translate = "translate"
-
-
-def require_binary(name: str, install_hint: str) -> None:
-    if shutil.which(name) is None:
-        raise typer.BadParameter(
-            f"{name} is required but was not found on PATH. {install_hint}"
-        )
 
 
 def run(
@@ -549,10 +544,6 @@ def whisper_transcript(
     transcribe_model: str,
     translate_model: str,
 ) -> tuple[str, str]:
-    require_binary("ffmpeg", "Install it with: brew install ffmpeg")
-    media = download_audio(url, work_dir)
-    duration = get_media_duration(media)
-    audio = work_dir / f"{media.stem}.wav"
     model = translate_model if task == WhisperTask.translate else transcribe_model
 
     if task == WhisperTask.translate and "turbo" in model.lower():
@@ -560,6 +551,12 @@ def whisper_transcript(
             "[yellow]Whisper turbo is not trained for translation; consider --whisper-translate-model "
             f"{WHISPER_TRANSLATE_MODEL}.[/yellow]"
         )
+
+    require_whisper_model_memory(model)
+    require_binary("ffmpeg")
+    media = download_audio(url, work_dir)
+    duration = get_media_duration(media)
+    audio = work_dir / f"{media.stem}.wav"
 
     with Progress(
         SpinnerColumn(),
@@ -883,7 +880,7 @@ def main(
         help="Overwrite existing summary/transcript output files.",
     ),
 ) -> None:
-    require_binary("yt-dlp", "Install it with: brew install yt-dlp")
+    require_binary("yt-dlp")
     require_binary("codex", "Install the Codex CLI and make sure it is on PATH.")
 
     temp_context: Optional[tempfile.TemporaryDirectory[str]] = None
