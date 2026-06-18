@@ -210,44 +210,48 @@ def main(
     ),
     model: str = typer.Option(
         DEFAULT_MODEL,
-        "--model",
-        "-m",
+        "--whisper-model",
         help="MLX Whisper model directory or Hugging Face repo.",
     ),
     language: Optional[str] = typer.Option(
         None,
-        "--language",
-        "-l",
+        "--whisper-language",
         help="Spoken language code, such as en or pl. Omit to auto-detect.",
     ),
     beam_size: Optional[int] = typer.Option(
         None,
-        "--beam-size",
+        "--whisper-beam-size",
         min=1,
         help="Beam size for temperature-0 decoding.",
     ),
     patience: Optional[float] = typer.Option(
         None,
-        "--patience",
+        "--whisper-patience",
         min=0.0,
         help="Optional patience value for beam decoding.",
     ),
     word_timestamps: bool = typer.Option(
-        False,
-        "--word-timestamps",
+        True,
+        "--whisper-word-timestamps/--no-whisper-word-timestamps",
         help="Use word-level timestamps before SRT line wrapping.",
+    ),
+    hallucination_silence_threshold: Optional[float] = typer.Option(
+        2.0,
+        "--whisper-hallucination-silence-threshold",
+        min=0.0,
+        help="Skip silent periods longer than this many seconds when a possible hallucination is detected.",
     ),
     max_line_width: Optional[int] = typer.Option(
         None,
         "--max-line-width",
         min=1,
-        help="Maximum subtitle line width. Requires --word-timestamps.",
+        help="Maximum subtitle line width. Requires --whisper-word-timestamps.",
     ),
     max_line_count: Optional[int] = typer.Option(
         None,
         "--max-line-count",
         min=1,
-        help="Maximum subtitle line count. Requires --word-timestamps and --max-line-width.",
+        help="Maximum subtitle line count. Requires --whisper-word-timestamps and --max-line-width.",
     ),
     overwrite: bool = typer.Option(
         False,
@@ -268,7 +272,7 @@ def main(
 
     if (max_line_width or max_line_count) and not word_timestamps:
         raise typer.BadParameter(
-            "--max-line-width and --max-line-count require --word-timestamps."
+            "--max-line-width and --max-line-count require --whisper-word-timestamps."
         )
     if max_line_count and not max_line_width:
         raise typer.BadParameter("--max-line-count requires --max-line-width.")
@@ -325,6 +329,7 @@ def main(
                 decode_options = {
                     "language": language,
                     "word_timestamps": word_timestamps,
+                    "hallucination_silence_threshold": hallucination_silence_threshold,
                     "verbose": False,
                 }
                 if beam_size is not None:

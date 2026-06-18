@@ -1,0 +1,27 @@
+#compdef mlx-subtitles
+
+_mlx_subtitles_video_file() {
+  setopt local_options extended_glob
+
+  _files -g '(#i)*.(3g2|3gp|avi|flv|m2ts|m4v|mkv|mov|mp4|mpeg|mpg|mts|mxf|ogv|ts|vob|webm|wmv)(.)' && return
+  _files
+}
+
+_mlx-subtitles() {
+  _arguments -C \
+    '(-o --output)'{-o,--output}'[SRT output path]:SRT output file:_files' \
+    '--whisper-model[MLX Whisper model directory or Hugging Face repo]:model or directory:_files -/' \
+    '--whisper-language[spoken language code, such as en or pl]:language code:' \
+    '--whisper-beam-size[beam size for temperature-0 decoding]:beam size:' \
+    '--whisper-patience[optional patience value for beam decoding]:patience:' \
+    '--whisper-word-timestamps[use word-level timestamps before SRT line wrapping]' \
+    '--no-whisper-word-timestamps[disable word-level timestamps]' \
+    '--whisper-hallucination-silence-threshold[skip silent periods during possible hallucinations]:seconds:' \
+    '--max-line-width[maximum subtitle line width]:columns:' \
+    '--max-line-count[maximum subtitle line count]:lines:' \
+    '--overwrite[overwrite an existing SRT output file]' \
+    '--help[show help and exit]' \
+    '1:video file:_mlx_subtitles_video_file'
+}
+
+_mlx-subtitles "$@"
