@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-import importlib
-import io
 import os
 import shutil
 import subprocess
@@ -12,7 +9,28 @@ from typing import Optional
 
 import typer
 from system_dependencies import require_binary
-from whisper_memory import require_whisper_model_memory
+from whisper_mlx import (
+    DEFAULT_APPEND_PUNCTUATIONS,
+    DEFAULT_BEAM_SIZE,
+    DEFAULT_BEST_OF,
+    DEFAULT_CLIP_TIMESTAMPS,
+    DEFAULT_COMPRESSION_RATIO_THRESHOLD,
+    DEFAULT_CONDITION_ON_PREVIOUS_TEXT,
+    DEFAULT_FP16,
+    DEFAULT_LENGTH_PENALTY,
+    DEFAULT_LOGPROB_THRESHOLD,
+    DEFAULT_NO_SPEECH_THRESHOLD,
+    DEFAULT_PATIENCE,
+    DEFAULT_PREPEND_PUNCTUATIONS,
+    DEFAULT_RETURN_CANDIDATES,
+    DEFAULT_SUPPRESS_TOKENS,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TEMPERATURE_INCREMENT_ON_FALLBACK,
+    DEFAULT_TRANSCRIBE_MODEL,
+    temperature_schedule,
+    transcribe_audio,
+    write_result_file,
+)
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
@@ -29,7 +47,7 @@ from rich.progress import (
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
 
-DEFAULT_MODEL = "mlx-community/whisper-large-v3-turbo"
+DEFAULT_MODEL = DEFAULT_TRANSCRIBE_MODEL
 
 app = typer.Typer(
     add_completion=False,
@@ -140,42 +158,6 @@ def extract_audio(
         progress.update(task_id, completed=duration)
 
 
-class RichTqdm:
-    def __init__(self, progress: Progress, *args, **kwargs):
-        self.progress = progress
-        self.total = kwargs.get("total")
-        self.disable = kwargs.get("disable", False)
-        self.task_id: Optional[TaskID] = None
-
-        if not self.disable:
-            self.task_id = self.progress.add_task(
-                "Transcribing locally with mlx-whisper...",
-                total=self.total,
-            )
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        self.close()
-        return False
-
-    def update(self, n: float = 1) -> None:
-        if self.task_id is not None:
-            self.progress.update(self.task_id, advance=n)
-
-    def close(self) -> None:
-        if self.task_id is not None and self.total is not None:
-            self.progress.update(self.task_id, completed=self.total)
-
-
-def rich_tqdm_factory(progress: Progress):
-    def rich_tqdm(*args, **kwargs):
-        return RichTqdm(progress, *args, **kwargs)
-
-    return rich_tqdm
-
-
 @app.command()
 def main(
     video: Path = typer.Argument(
@@ -208,7 +190,7 @@ def main(
         help="Spoken language code, such as en or pl. Omit to auto-detect.",
     ),
     beam_size: Optional[int] = typer.Option(
-        None,
+        DEFAULT_BEAM_SIZE,
         "--whisper-beam-size",
         min=1,
         help="Beam size for temperature-0 decoding.",
@@ -266,8 +248,6 @@ def main(
     if max_line_count and not max_line_width:
         raise typer.BadParameter("--max-line-count requires --max-line-width.")
 
-    require_whisper_model_memory(model)
-
     console.print(
         Panel.fit(
             f"[bold]{video.name}[/bold]\nmodel: [cyan]{model}[/cyan]\noutput: {output_path}",
@@ -312,51 +292,51 @@ def main(
                         completed=duration,
                     )
 
-                transcribe_module = importlib.import_module("mlx_whisper.transcribe")
-                writers_module = importlib.import_module("mlx_whisper.writers")
-                original_tqdm = transcribe_module.tqdm.tqdm
-                transcribe_module.tqdm.tqdm = rich_tqdm_factory(progress)
-
                 decode_options = {
                     "language": language,
+                    "temperature": temperature_schedule(
+                        DEFAULT_TEMPERATURE,
+                        DEFAULT_TEMPERATURE_INCREMENT_ON_FALLBACK,
+                    ),
+                    "best_of": DEFAULT_BEST_OF,
+                    "beam_size": beam_size,
+                    "patience": DEFAULT_PATIENCE,
+                    "length_penalty": DEFAULT_LENGTH_PENALTY,
+                    "suppress_tokens": DEFAULT_SUPPRESS_TOKENS,
+                    "condition_on_previous_text": DEFAULT_CONDITION_ON_PREVIOUS_TEXT,
+                    "fp16": DEFAULT_FP16,
+                    "compression_ratio_threshold": DEFAULT_COMPRESSION_RATIO_THRESHOLD,
+                    "logprob_threshold": DEFAULT_LOGPROB_THRESHOLD,
+                    "no_speech_threshold": DEFAULT_NO_SPEECH_THRESHOLD,
                     "word_timestamps": word_timestamps,
+                    "prepend_punctuations": DEFAULT_PREPEND_PUNCTUATIONS,
+                    "append_punctuations": DEFAULT_APPEND_PUNCTUATIONS,
+                    "clip_timestamps": DEFAULT_CLIP_TIMESTAMPS,
                     "hallucination_silence_threshold": hallucination_silence_threshold,
+                    "return_candidates": DEFAULT_RETURN_CANDIDATES,
                     "verbose": False,
                 }
-                if beam_size is not None:
-                    decode_options["beam_size"] = beam_size
                 if patience is not None:
                     decode_options["patience"] = patience
 
-                try:
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        result = transcribe_module.transcribe(
-                            str(audio_path),
-                            path_or_hf_repo=model,
-                            **decode_options,
-                        )
-                finally:
-                    transcribe_module.tqdm.tqdm = original_tqdm
+                result = transcribe_audio(
+                    audio_path,
+                    model=model,
+                    progress=progress,
+                    progress_description="Transcribing locally with mlx-whisper...",
+                    **decode_options,
+                )
 
                 write_task = progress.add_task("Writing SRT subtitles...", total=1)
-                writer_output_dir = output_path.parent
-                writer_output_name = output_path.stem
-                if "." in writer_output_name:
-                    writer_output_dir = Path(temp_dir)
-                    writer_output_name = "subtitles"
-
-                writer = writers_module.WriteSRT(str(writer_output_dir))
-                writer(
+                write_result_file(
                     result,
-                    writer_output_name,
-                    max_line_width=max_line_width,
-                    max_line_count=max_line_count,
+                    output_path,
+                    output_format="srt",
+                    writer_options={
+                        "max_line_width": max_line_width,
+                        "max_line_count": max_line_count,
+                    },
                 )
-                generated_output = (writer_output_dir / writer_output_name).with_suffix(
-                    ".srt"
-                )
-                if generated_output != output_path:
-                    shutil.move(generated_output, output_path)
                 progress.update(
                     write_task,
                     description="SRT subtitles written",

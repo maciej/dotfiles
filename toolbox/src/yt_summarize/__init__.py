@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import contextlib
 import html
-import importlib
-import io
 import json
 import os
 import re
@@ -18,7 +15,31 @@ from urllib.parse import parse_qs, urlparse
 
 import typer
 from system_dependencies import require_binary
-from whisper_memory import require_whisper_model_memory
+from whisper_mlx import (
+    DEFAULT_APPEND_PUNCTUATIONS,
+    DEFAULT_BEAM_SIZE,
+    DEFAULT_BEST_OF,
+    DEFAULT_CLIP_TIMESTAMPS,
+    DEFAULT_COMPRESSION_RATIO_THRESHOLD,
+    DEFAULT_CONDITION_ON_PREVIOUS_TEXT,
+    DEFAULT_FP16,
+    DEFAULT_HALLUCINATION_SILENCE_THRESHOLD,
+    DEFAULT_LENGTH_PENALTY,
+    DEFAULT_LOGPROB_THRESHOLD,
+    DEFAULT_NO_SPEECH_THRESHOLD,
+    DEFAULT_PATIENCE,
+    DEFAULT_PREPEND_PUNCTUATIONS,
+    DEFAULT_RETURN_CANDIDATES,
+    DEFAULT_SUPPRESS_TOKENS,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TEMPERATURE_INCREMENT_ON_FALLBACK,
+    DEFAULT_TRANSCRIBE_MODEL,
+    DEFAULT_TRANSLATE_MODEL,
+    DEFAULT_WORD_TIMESTAMPS,
+    WhisperTask,
+    temperature_schedule,
+    transcribe_audio,
+)
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -37,8 +58,8 @@ os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
 
 SUMMARY_MODEL = "gpt-5.4-mini"
-WHISPER_TRANSCRIBE_MODEL = "mlx-community/whisper-large-v3-turbo"
-WHISPER_TRANSLATE_MODEL = "mlx-community/whisper-medium-mlx"
+WHISPER_TRANSCRIBE_MODEL = DEFAULT_TRANSCRIBE_MODEL
+WHISPER_TRANSLATE_MODEL = DEFAULT_TRANSLATE_MODEL
 CACHE_NAMESPACE = "yt-summarize"
 DEFAULT_MAX_RENDER_WIDTH = 120
 YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -55,11 +76,6 @@ class SummarySize(str, Enum):
     m = "m"
     long = "l"
     xl = "xl"
-
-
-class WhisperTask(str, Enum):
-    transcribe = "transcribe"
-    translate = "translate"
 
 
 def run(
@@ -636,42 +652,6 @@ def extract_audio(
         progress.update(task_id, completed=duration)
 
 
-class RichTqdm:
-    def __init__(self, progress: Progress, *args, **kwargs):
-        self.progress = progress
-        self.total = kwargs.get("total")
-        self.disable = kwargs.get("disable", False)
-        self.task_id: Optional[TaskID] = None
-
-        if not self.disable:
-            self.task_id = self.progress.add_task(
-                "Running mlx-whisper locally...",
-                total=self.total,
-            )
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        self.close()
-        return False
-
-    def update(self, n: float = 1) -> None:
-        if self.task_id is not None:
-            self.progress.update(self.task_id, advance=n)
-
-    def close(self) -> None:
-        if self.task_id is not None and self.total is not None:
-            self.progress.update(self.task_id, completed=self.total)
-
-
-def rich_tqdm_factory(progress: Progress):
-    def rich_tqdm(*args, **kwargs):
-        return RichTqdm(progress, *args, **kwargs)
-
-    return rich_tqdm
-
-
 def whisper_transcript(
     url: str,
     work_dir: Path,
@@ -689,7 +669,6 @@ def whisper_transcript(
             f"{WHISPER_TRANSLATE_MODEL}.[/yellow]"
         )
 
-    require_whisper_model_memory(model)
     require_binary("ffmpeg")
     media = download_audio(url, work_dir)
     duration = get_media_duration(media)
@@ -713,24 +692,38 @@ def whisper_transcript(
             completed=duration if duration is not None else None,
         )
 
-        transcribe_module = importlib.import_module("mlx_whisper.transcribe")
-        original_tqdm = transcribe_module.tqdm.tqdm
-        transcribe_module.tqdm.tqdm = rich_tqdm_factory(progress)
-
         decode_options = {
             "task": task.value,
             "language": language,
             "verbose": False,
+            "temperature": temperature_schedule(
+                DEFAULT_TEMPERATURE,
+                DEFAULT_TEMPERATURE_INCREMENT_ON_FALLBACK,
+            ),
+            "best_of": DEFAULT_BEST_OF,
+            "beam_size": DEFAULT_BEAM_SIZE,
+            "patience": DEFAULT_PATIENCE,
+            "length_penalty": DEFAULT_LENGTH_PENALTY,
+            "suppress_tokens": DEFAULT_SUPPRESS_TOKENS,
+            "condition_on_previous_text": DEFAULT_CONDITION_ON_PREVIOUS_TEXT,
+            "fp16": DEFAULT_FP16,
+            "compression_ratio_threshold": DEFAULT_COMPRESSION_RATIO_THRESHOLD,
+            "logprob_threshold": DEFAULT_LOGPROB_THRESHOLD,
+            "no_speech_threshold": DEFAULT_NO_SPEECH_THRESHOLD,
+            "word_timestamps": DEFAULT_WORD_TIMESTAMPS,
+            "prepend_punctuations": DEFAULT_PREPEND_PUNCTUATIONS,
+            "append_punctuations": DEFAULT_APPEND_PUNCTUATIONS,
+            "clip_timestamps": DEFAULT_CLIP_TIMESTAMPS,
+            "hallucination_silence_threshold": DEFAULT_HALLUCINATION_SILENCE_THRESHOLD,
+            "return_candidates": DEFAULT_RETURN_CANDIDATES,
         }
-        try:
-            with contextlib.redirect_stdout(io.StringIO()):
-                result = transcribe_module.transcribe(
-                    str(audio),
-                    path_or_hf_repo=model,
-                    **decode_options,
-                )
-        finally:
-            transcribe_module.tqdm.tqdm = original_tqdm
+        result = transcribe_audio(
+            audio,
+            model=model,
+            progress=progress,
+            progress_description="Running mlx-whisper locally...",
+            **decode_options,
+        )
 
     text = normalize_transcript(str(result.get("text", "")))
     if len(text.split()) < 20:
