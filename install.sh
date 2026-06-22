@@ -16,13 +16,22 @@ SCRIPT_SOURCED=false
 LEGACY_STOW_PATHS=(
   "${HOME}/.agents/skills/gitlab"
   "${HOME}/.agents/skills/browser-use"
+  # Verified workaround for Codex issue #28505: active personal skills now
+  # stow through ~/.codex/skills instead of ~/.agents/skills.
+  "${HOME}/.agents/skills/browser-use-cli"
+  "${HOME}/.agents/skills/gh-address-comments"
+  "${HOME}/.agents/skills/gh-fix-ci"
+  "${HOME}/.agents/skills/gh-yeet"
+  "${HOME}/.agents/skills/github"
+  "${HOME}/.agents/skills/mapskit"
+  "${HOME}/.agents/skills/python-plots-styling"
   "${HOME}/.config/opencode/commands/fix-mr.md"
   "${HOME}/.config/opencode/skills/gitlab"
   "${HOME}/.shell_paths"
 )
 
 PRECREATED_STOW_DIRECTORIES=(
-  "${HOME}/.agents/skills"
+  "${HOME}/.codex/skills"
 )
 
 # Package manifests. Keep these near the top so host package changes stay easy to edit.
