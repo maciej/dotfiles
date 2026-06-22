@@ -229,10 +229,10 @@ Install dotfiles packages and link configuration files.
 
 Options:
   --local              Link dotfiles and install user-local tools only. This
-                       currently installs Helix and Codex CLI into user-local
-                       locations and does not install packages or modify system
-                       state. Also remember this as the default for future
-                       installs on this host.
+                       currently installs bat, git-delta, Helix, and Codex CLI
+                       into user-local locations and does not install packages
+                       or modify system state. Also remember this as the
+                       default for future installs on this host.
   --no-local           Run a full install even when the local-install default
                        marker exists, and remove that marker.
   --upgrade            On Linux, upgrade Helix, uv, and Codex CLI when they are
@@ -426,6 +426,7 @@ is_raspbian_host() {
 readonly MIB=1048576
 readonly HELIX_TEMP_MIN_FREE_BYTES=$((512 * MIB))
 readonly GIT_DELTA_TEMP_MIN_FREE_BYTES=$((64 * MIB))
+readonly BAT_TEMP_MIN_FREE_BYTES=$((64 * MIB))
 
 TEMP_DIR_CLEANUP_ITEMS=()
 
@@ -551,6 +552,178 @@ create_managed_temp_dir() {
   chmod 755 "${managed_tmp_dir}"
   register_temp_dir_for_cleanup "${managed_tmp_dir}"
   printf -v "${__resultvar}" '%s' "${managed_tmp_dir}"
+}
+
+resolve_github_release_asset() {
+  local repo="$1"
+  local asset_pattern="$2"
+  local __url_var="$3"
+  local __name_var="$4"
+  local __size_var="$5"
+  local resolved_asset_name="" resolved_asset_size_bytes="" resolved_asset_url=""
+  local release_json
+
+  release_json="$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest")" || return 1
+
+  if command -v jq >/dev/null 2>&1; then
+    read -r resolved_asset_url resolved_asset_name resolved_asset_size_bytes < <(
+      jq -r --arg pattern "${asset_pattern}" '.assets[] | select(.name | endswith($pattern)) | [.browser_download_url, .name, (.size | tostring)] | @tsv' \
+        <<<"${release_json}" \
+        | head -n 1
+    ) || true
+  else
+    resolved_asset_url="$(
+      grep -F '"browser_download_url":' <<<"${release_json}" \
+        | grep -F "${asset_pattern}" \
+        | sed -nE 's/.*"browser_download_url": "([^"]+)".*/\1/p' \
+        | head -n 1 \
+        || true
+    )"
+    resolved_asset_name="${resolved_asset_url##*/}"
+    resolved_asset_size_bytes=""
+  fi
+
+  printf -v "${__url_var}" '%s' "${resolved_asset_url}"
+  printf -v "${__name_var}" '%s' "${resolved_asset_name}"
+  printf -v "${__size_var}" '%s' "${resolved_asset_size_bytes}"
+}
+
+install_release_binary_local() {
+  local tool_name="$1"
+  local repo="$2"
+  local asset_pattern="$3"
+  local binary_name="$4"
+  local min_free_bytes="$5"
+  local binary_path="${HOME}/.local/bin/${binary_name}"
+  local asset_name="" asset_size_bytes="" asset_url="" candidate_binary="" extracted_binary="" tarball="" tmp_dir=""
+  local installed=false
+
+  ensure_user_local_bin_on_path
+
+  if [[ -x "${binary_path}" ]]; then
+    installed=true
+  fi
+
+  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
+    log "${tool_name} already installed"
+    return
+  fi
+
+  command -v curl >/dev/null 2>&1 || {
+    log "${tool_name} installer requires curl"
+    return 1
+  }
+  command -v tar >/dev/null 2>&1 || {
+    log "${tool_name} installer requires tar"
+    return 1
+  }
+
+  resolve_github_release_asset "${repo}" "${asset_pattern}" asset_url asset_name asset_size_bytes
+
+  if [[ -z "${asset_url}" ]]; then
+    log "Could not find an official ${tool_name} release asset matching ${asset_pattern}"
+    return 1
+  fi
+
+  if [[ -z "${asset_size_bytes}" ]] || ! [[ "${asset_size_bytes}" =~ ^[0-9]+$ ]] || (( asset_size_bytes <= 0 )); then
+    asset_size_bytes="${min_free_bytes}"
+  fi
+
+  if (( asset_size_bytes < min_free_bytes )); then
+    asset_size_bytes="${min_free_bytes}"
+  fi
+
+  create_managed_temp_dir tmp_dir "${asset_size_bytes}" "${tool_name} archive download and extraction (${asset_name})" "${binary_name}" || return 1
+  tarball="${tmp_dir}/${asset_name}"
+
+  curl -fsSL "${asset_url}" -o "${tarball}"
+  tar -xzf "${tarball}" -C "${tmp_dir}"
+
+  while IFS= read -r candidate_binary; do
+    if [[ -x "${candidate_binary}" ]]; then
+      extracted_binary="${candidate_binary}"
+      break
+    fi
+  done < <(find "${tmp_dir}" -type f -name "${binary_name}")
+  if [[ -z "${extracted_binary}" ]]; then
+    log "${tool_name} release archive did not contain an executable ${binary_name} binary"
+    return 1
+  fi
+
+  mkdir -p "${HOME}/.local/bin"
+  install -m 0755 "${extracted_binary}" "${binary_path}"
+
+  cleanup_temp_dir_now "${tmp_dir}"
+  if [[ "${installed}" == "true" ]]; then
+    log "Upgraded ${tool_name} from official release asset"
+  else
+    log "Installed ${tool_name} from official release asset"
+  fi
+}
+
+install_bat_local() {
+  local arch asset_pattern os
+
+  os="$(uname -s 2>/dev/null || true)"
+  arch="$(uname -m 2>/dev/null || true)"
+
+  case "${os}:${arch}" in
+    Darwin:arm64|Darwin:aarch64)
+      asset_pattern="aarch64-apple-darwin.tar.gz"
+      ;;
+    Darwin:x86_64|Darwin:amd64)
+      asset_pattern="x86_64-apple-darwin.tar.gz"
+      ;;
+    Linux:aarch64|Linux:arm64)
+      asset_pattern="aarch64-unknown-linux-gnu.tar.gz"
+      ;;
+    Linux:x86_64|Linux:amd64)
+      asset_pattern="x86_64-unknown-linux-gnu.tar.gz"
+      ;;
+    Linux:armv6l|Linux:armv7l|Linux:armhf)
+      asset_pattern="arm-unknown-linux-gnueabihf.tar.gz"
+      ;;
+    Linux:i386|Linux:i686)
+      asset_pattern="i686-unknown-linux-gnu.tar.gz"
+      ;;
+    *)
+      log "No official user-local bat release is available for ${os:-unknown}/${arch:-unknown}; skipping bat installation"
+      return
+      ;;
+  esac
+
+  install_release_binary_local "bat" "sharkdp/bat" "${asset_pattern}" "bat" "${BAT_TEMP_MIN_FREE_BYTES}"
+}
+
+install_git_delta_local() {
+  local arch asset_pattern os
+
+  os="$(uname -s 2>/dev/null || true)"
+  arch="$(uname -m 2>/dev/null || true)"
+
+  case "${os}:${arch}" in
+    Darwin:arm64|Darwin:aarch64)
+      asset_pattern="aarch64-apple-darwin.tar.gz"
+      ;;
+    Linux:aarch64|Linux:arm64)
+      asset_pattern="aarch64-unknown-linux-gnu.tar.gz"
+      ;;
+    Linux:x86_64|Linux:amd64)
+      asset_pattern="x86_64-unknown-linux-gnu.tar.gz"
+      ;;
+    Linux:armv6l|Linux:armv7l|Linux:armhf)
+      asset_pattern="arm-unknown-linux-gnueabihf.tar.gz"
+      ;;
+    Linux:i386|Linux:i686)
+      asset_pattern="i686-unknown-linux-gnu.tar.gz"
+      ;;
+    *)
+      log "No official user-local git-delta release is available for ${os:-unknown}/${arch:-unknown}; skipping git-delta installation"
+      return
+      ;;
+  esac
+
+  install_release_binary_local "git-delta" "dandavison/delta" "${asset_pattern}" "delta" "${GIT_DELTA_TEMP_MIN_FREE_BYTES}"
 }
 
 install_git_delta_linux() {
@@ -1404,6 +1577,8 @@ rebuild_bat_cache() {
 local_install() {
   ensure_user_local_bin_on_path
 
+  install_bat_local
+  install_git_delta_local
   install_helix_local
   install_codex_cli_local
 
@@ -1413,6 +1588,7 @@ local_install() {
   ensure_ssh_config_fragment_directory
   link_dotfiles
   ensure_ssh_config_include
+  rebuild_bat_cache
   if [[ "${SYNC_ZED_SETTINGS}" == "true" ]]; then
     sync_zed_settings
   else
