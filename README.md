@@ -30,6 +30,13 @@ a full install again and remove that marker.
 
 ## Some software choices
 
+The local install currently installs `bat`, `delta`, and Helix from upstream
+release archives into `~/.local/bin`, copies the Helix runtime into
+`~/.config/helix/runtime`, installs the Codex CLI standalone package under
+`~/.codex/packages/standalone` with a `~/.local/bin/codex` launcher, and links
+dotfiles with Stow. Obsidian skills are tracked directly under `.codex/skills/`,
+so Stow links them into `~/.codex/skills` with the rest of the dotfiles.
+
 ### Editor
 
 - Local sessions use **Zed** (`zed --wait`) as the default editor.

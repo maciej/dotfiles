@@ -204,6 +204,99 @@ CODEX_HOME=${HOME}/.codex
 CODEX_NON_INTERACTIVE=1"
 }
 
+test_local_release_installers_install_bat_and_delta() {
+  local fake_bin
+
+  UPGRADE=false
+  fake_bin="${HOME}/fake-bin"
+  mkdir -p "${fake_bin}"
+
+  cat >"${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+output_file=""
+url=""
+while (( $# > 0 )); do
+  case "$1" in
+    -o)
+      output_file="$2"
+      shift 2
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+case "${url}" in
+  https://api.github.com/repos/sharkdp/bat/releases/latest)
+    printf '{"assets":[{"name":"bat-v0.0.0-x86_64-unknown-linux-gnu.tar.gz","browser_download_url":"https://example.test/bat-v0.0.0-x86_64-unknown-linux-gnu.tar.gz","size":1024}]}'
+    ;;
+  https://api.github.com/repos/dandavison/delta/releases/latest)
+    printf '{"assets":[{"name":"delta-0.0.0-x86_64-unknown-linux-gnu.tar.gz","browser_download_url":"https://example.test/delta-0.0.0-x86_64-unknown-linux-gnu.tar.gz","size":1024}]}'
+    ;;
+  https://example.test/*)
+    printf 'fake archive' >"${output_file:?}"
+    ;;
+  *)
+    printf 'unexpected curl URL: %s\n' "${url}" >&2
+    exit 1
+    ;;
+esac
+EOF
+  chmod 755 "${fake_bin}/curl"
+
+  cat >"${fake_bin}/tar" <<'EOF'
+#!/usr/bin/env bash
+archive=""
+dest=""
+while (( $# > 0 )); do
+  case "$1" in
+    -C)
+      dest="$2"
+      shift 2
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      archive="$1"
+      shift
+      ;;
+  esac
+done
+
+case "${archive}" in
+  *bat*)
+    mkdir -p "${dest:?}/bat-release"
+    printf 'bat binary' >"${dest}/bat-release/bat"
+    chmod 700 "${dest}/bat-release/bat"
+    ;;
+  *delta*)
+    mkdir -p "${dest:?}/delta-release"
+    printf 'delta binary' >"${dest}/delta-release/delta"
+    chmod 700 "${dest}/delta-release/delta"
+    ;;
+  *)
+    printf 'unexpected archive: %s\n' "${archive}" >&2
+    exit 1
+    ;;
+esac
+EOF
+  chmod 755 "${fake_bin}/tar"
+
+  PATH="${fake_bin}:${PATH}" install_bat_local
+  PATH="${fake_bin}:${PATH}" install_git_delta_local
+
+  [[ -x "${HOME}/.local/bin/bat" ]]
+  [[ -x "${HOME}/.local/bin/delta" ]]
+  assert_file_equals "${HOME}/.local/bin/bat" "bat binary"
+  assert_file_equals "${HOME}/.local/bin/delta" "delta binary"
+}
+
 test_make_rejects_unknown_install_target() {
   local output status
 
@@ -224,4 +317,5 @@ with_temp_home "local install marker enables local default" test_local_install_m
 with_temp_home "explicit local writes marker" test_explicit_local_writes_marker
 with_temp_home "no local clears marker" test_no_local_clears_marker
 with_temp_home "Codex local installer uses home-scoped environment" test_codex_local_installer_uses_home_scoped_env
+with_temp_home "local release installers install bat and delta" test_local_release_installers_install_bat_and_delta
 with_temp_home "make rejects unknown install target" test_make_rejects_unknown_install_target
