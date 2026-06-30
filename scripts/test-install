@@ -288,6 +288,22 @@ esac
 EOF
   chmod 755 "${fake_bin}/tar"
 
+  cat >"${fake_bin}/uname" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  -s)
+    printf 'Linux\n'
+    ;;
+  -m)
+    printf 'x86_64\n'
+    ;;
+  *)
+    printf 'Linux\n'
+    ;;
+esac
+EOF
+  chmod 755 "${fake_bin}/uname"
+
   PATH="${fake_bin}:${PATH}" install_bat_local
   PATH="${fake_bin}:${PATH}" install_git_delta_local
 
@@ -295,6 +311,97 @@ EOF
   [[ -x "${HOME}/.local/bin/delta" ]]
   assert_file_equals "${HOME}/.local/bin/bat" "bat binary"
   assert_file_equals "${HOME}/.local/bin/delta" "delta binary"
+}
+
+make_fake_apt_bin() {
+  local fake_bin="$1"
+
+  mkdir -p "${fake_bin}"
+
+  cat >"${fake_bin}/sudo" <<'EOF'
+#!/usr/bin/env bash
+exec "$@"
+EOF
+  chmod 755 "${fake_bin}/sudo"
+
+  cat >"${fake_bin}/apt-get" <<'EOF'
+#!/usr/bin/env bash
+printf 'apt-get %s\n' "$*" >>"${APT_TEST_LOG:?}"
+EOF
+  chmod 755 "${fake_bin}/apt-get"
+
+  cat >"${fake_bin}/apt-cache" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "show" ]]; then
+  printf 'unexpected apt-cache command: %s\n' "$*" >&2
+  exit 1
+fi
+
+case " ${APT_TEST_AVAILABLE:-} " in
+  *" ${2:-} "*)
+    printf 'Package: %s\n' "$2"
+    ;;
+  *)
+    exit 100
+    ;;
+esac
+EOF
+  chmod 755 "${fake_bin}/apt-cache"
+
+  cat >"${fake_bin}/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+pkg="${@: -1}"
+case " ${APT_TEST_INSTALLED:-} " in
+  *" ${pkg} "*)
+    printf 'install ok installed'
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+  chmod 755 "${fake_bin}/dpkg-query"
+}
+
+test_apt_skips_unavailable_optional_packages() {
+  local fake_bin log_file
+  local APT_PACKAGES=(curl git)
+  local APT_OPTIONAL_PACKAGES=(lazygit)
+
+  fake_bin="${HOME}/fake-bin"
+  log_file="${HOME}/apt.log"
+  make_fake_apt_bin "${fake_bin}"
+
+  PATH="${fake_bin}:${PATH}" \
+    APT_TEST_LOG="${log_file}" \
+    APT_TEST_AVAILABLE="curl git" \
+    APT_TEST_INSTALLED="" \
+    install_apt_packages
+
+  assert_file_equals "${log_file}" "apt-get update
+apt-get install -y curl git"
+}
+
+test_apt_fails_when_required_package_is_unavailable() {
+  local fake_bin log_file output status
+  local APT_PACKAGES=(curl missing-required)
+  local APT_OPTIONAL_PACKAGES=(lazygit)
+
+  fake_bin="${HOME}/fake-bin"
+  log_file="${HOME}/apt.log"
+  make_fake_apt_bin "${fake_bin}"
+
+  output="$(
+    PATH="${fake_bin}:${PATH}" \
+      APT_TEST_LOG="${log_file}" \
+      APT_TEST_AVAILABLE="curl" \
+      APT_TEST_INSTALLED="" \
+      install_apt_packages 2>&1
+  )" && status=0 || status=$?
+
+  [[ "${status}" -ne 0 ]]
+  grep -q "Required apt package is unavailable in configured repositories: missing-required" <<<"${output}"
+  assert_file_equals "${log_file}" "apt-get update"
 }
 
 test_make_rejects_unknown_install_target() {
@@ -318,4 +425,6 @@ with_temp_home "explicit local writes marker" test_explicit_local_writes_marker
 with_temp_home "no local clears marker" test_no_local_clears_marker
 with_temp_home "Codex local installer uses home-scoped environment" test_codex_local_installer_uses_home_scoped_env
 with_temp_home "local release installers install bat and delta" test_local_release_installers_install_bat_and_delta
+with_temp_home "apt skips unavailable optional packages" test_apt_skips_unavailable_optional_packages
+with_temp_home "apt fails when required package is unavailable" test_apt_fails_when_required_package_is_unavailable
 with_temp_home "make rejects unknown install target" test_make_rejects_unknown_install_target

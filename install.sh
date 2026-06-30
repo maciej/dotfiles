@@ -73,7 +73,6 @@ APT_PACKAGES=(
   gh
   git
   jq
-  lazygit
   kitty
   ncurses-bin
   python3
@@ -84,6 +83,10 @@ APT_PACKAGES=(
   vim
   zoxide
   zsh
+)
+
+APT_OPTIONAL_PACKAGES=(
+  lazygit
 )
 
 # Install non-preview cask apps
@@ -151,8 +154,9 @@ install_brew_casks() {
 }
 
 install_apt_packages() {
-  local missing pkg status
+  local missing pkg status unavailable_required
   missing=()
+  unavailable_required=()
 
   log "Updating apt package metadata"
   sudo env DEBIAN_FRONTEND=noninteractive apt-get update
@@ -161,8 +165,27 @@ install_apt_packages() {
     status="$(dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null || true)"
     if [[ "${status}" == "install ok installed" ]]; then
       log "Already installed: ${pkg}"
-    else
+    elif apt-cache show "${pkg}" >/dev/null 2>&1; then
       missing+=("${pkg}")
+    else
+      log_err "Required apt package is unavailable in configured repositories: ${pkg}"
+      unavailable_required+=("${pkg}")
+    fi
+  done
+
+  if (( ${#unavailable_required[@]} > 0 )); then
+    log_err "Cannot continue without required apt packages: ${unavailable_required[*]}"
+    return 1
+  fi
+
+  for pkg in "${APT_OPTIONAL_PACKAGES[@]}"; do
+    status="$(dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null || true)"
+    if [[ "${status}" == "install ok installed" ]]; then
+      log "Already installed optional apt package: ${pkg}"
+    elif apt-cache show "${pkg}" >/dev/null 2>&1; then
+      missing+=("${pkg}")
+    else
+      log "Skipping unavailable optional apt package: ${pkg}"
     fi
   done
 
