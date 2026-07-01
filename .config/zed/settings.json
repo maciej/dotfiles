@@ -47,6 +47,10 @@
   },
   "agent_servers": {
     "codex-acp": {
+      "default_config_options": {
+        "mode": "full-access",
+        "reasoning_effort": "medium"
+      },
       "type": "registry"
     },
     "OpenCode": {
