@@ -33,6 +33,7 @@
   },
   "agent": {
     "dock": "right",
+    "sidebar_side": "right",
     "inline_assistant_model": {
       "provider": "openrouter",
       "model": "nvidia/nemotron-3-super-120b-a12b:free",
