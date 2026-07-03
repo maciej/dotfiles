@@ -47,7 +47,8 @@ The second form resolves the current branch PR through `gh pr view`.
 
 ## Write Safety
 
-- Do not reply on GitHub, resolve review threads, or submit a review unless the user explicitly asks for that write action.
+- Do not reply on GitHub or submit a review unless the user explicitly asks for that write action.
+- Do not resolve human-authored review threads unless explicitly asked. If the user asks Codex to address a bot-authored discussion and Codex implements the fix, resolve that discussion; bot-authored means GitHub marks the author as a bot, such as Gemini Code Assist / `gemini-code-assist`.
 - If review comments conflict with each other or would cause a behavioral regression, surface the tradeoff before making changes.
 - If a comment is ambiguous, ask for clarification or draft a proposed response instead of guessing.
 - Do not treat flat PR comments as a complete representation of review-thread state.
