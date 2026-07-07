@@ -116,3 +116,7 @@ fish_add_path "$PNPM_HOME/bin"
 if command -q sag
     set -gx ELEVENLABS_API_KEY_FILE "$HOME/.config/sag/elevenlabs.key"
 end
+
+if command -q summarize; and not set -q SUMMARIZE_OPENAI_API_KEY_FILE
+    set -gx SUMMARIZE_OPENAI_API_KEY_FILE "$HOME/.config/summarize/openai.key"
+end
