@@ -9,6 +9,7 @@ UPGRADE=false
 SYNC_ZED_SETTINGS=false
 LOCAL_INSTALL=false
 LOCAL_INSTALL_CHOICE=auto
+WITH_GROUPS=()
 SCRIPT_SOURCED=false
 (return 0 2>/dev/null) && SCRIPT_SOURCED=true
 
@@ -64,6 +65,11 @@ BREW_PACKAGES=(
   ocrmypdf
 )
 
+BREW_K8S_PACKAGES=(
+  kubernetes-cli
+  kubie
+)
+
 # shellcheck disable=SC3030
 APT_PACKAGES=(
   bat
@@ -107,12 +113,19 @@ UV_TOOL_PACKAGES=(
   ty
 )
 
-install_brew_packages() {
+install_brew_package_list() {
+  local label="$1"
+  shift
   local installed missing pkg
-  installed=$'\n'"$(brew list --versions "${BREW_PACKAGES[@]}" 2>/dev/null || true)"$'\n'
+
+  if (( $# == 0 )); then
+    return
+  fi
+
+  installed=$'\n'"$(brew list --versions "$@" 2>/dev/null || true)"$'\n'
   missing=()
 
-  for pkg in "${BREW_PACKAGES[@]}"; do
+  for pkg in "$@"; do
     if [[ "${installed}" == *$'\n'"${pkg} "* ]] || [[ "${installed}" == *$'\n'"${pkg}@"* ]]; then
       log "Already installed: ${pkg}"
     elif brew list --versions "${pkg}" >/dev/null 2>&1; then
@@ -123,12 +136,28 @@ install_brew_packages() {
   done
 
   if (( ${#missing[@]} == 0 )); then
-    log "All requested brew packages are already installed"
+    if [[ -n "${label}" ]]; then
+      log "All requested ${label} brew packages are already installed"
+    else
+      log "All requested brew packages are already installed"
+    fi
     return
   fi
 
-  log "Installing missing brew packages: ${missing[*]}"
+  if [[ -n "${label}" ]]; then
+    log "Installing missing ${label} brew packages: ${missing[*]}"
+  else
+    log "Installing missing brew packages: ${missing[*]}"
+  fi
   brew install "${missing[@]}"
+}
+
+install_brew_packages() {
+  install_brew_package_list "" "${BREW_PACKAGES[@]}"
+}
+
+install_brew_k8s_packages() {
+  install_brew_package_list "k8s" "${BREW_K8S_PACKAGES[@]}"
 }
 
 install_brew_casks() {
@@ -246,7 +275,7 @@ ensure_macos_command_line_tools() {
 
 print_help() {
   cat <<EOF
-Usage: install.sh [--local] [--no-local] [--upgrade] [--sync-zed-settings] [--help]
+Usage: install.sh [--local] [--no-local] [--with GROUP[,GROUP...]] [--upgrade] [--sync-zed-settings] [--help]
 
 Install dotfiles packages and link configuration files.
 
@@ -258,6 +287,9 @@ Options:
                        default for future installs on this host.
   --no-local           Run a full install even when the local-install default
                        marker exists, and remove that marker.
+  --with GROUP         Include optional tool group(s). May be repeated or use
+                       comma-separated values. Available groups:
+                       k8s (kubectl, kubie). Not valid with --local.
   --upgrade            On Linux, upgrade Helix, uv, and Codex CLI when they are
                        managed by the non-apt installer path. Does not run apt
                        upgrade or brew upgrade.
@@ -265,6 +297,84 @@ Options:
                        shared settings after linking dotfiles.
   --help               Show this help message and exit.
 EOF
+}
+
+is_known_with_group() {
+  case "$1" in
+    k8s)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+with_group_selected() {
+  local group="$1"
+  local selected
+
+  for selected in "${WITH_GROUPS[@]}"; do
+    if [[ "${selected}" == "${group}" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+add_with_group() {
+  local group="$1"
+
+  if [[ -z "${group}" ]]; then
+    log_err "Optional tool group cannot be empty."
+    return 1
+  fi
+
+  if ! is_known_with_group "${group}"; then
+    log_err "Unknown optional tool group: ${group}"
+    return 1
+  fi
+
+  if ! with_group_selected "${group}"; then
+    WITH_GROUPS+=("${group}")
+  fi
+}
+
+parse_with_groups() {
+  local group rest
+
+  rest="$1"
+  if [[ -z "${rest}" ]]; then
+    log_err "--with requires an optional tool group."
+    return 1
+  fi
+
+  if [[ "${rest}" == *, ]]; then
+    log_err "Optional tool group cannot be empty."
+    return 1
+  fi
+
+  while :; do
+    if [[ "${rest}" == *,* ]]; then
+      group="${rest%%,*}"
+      rest="${rest#*,}"
+    else
+      group="${rest}"
+      rest=""
+    fi
+
+    add_with_group "${group}" || return 1
+
+    [[ -n "${rest}" ]] || break
+  done
+}
+
+validate_install_mode_options() {
+  if [[ "${LOCAL_INSTALL_CHOICE}" == "local" && ${#WITH_GROUPS[@]} -gt 0 ]]; then
+    log_err "--with installs optional system tool groups and cannot be combined with --local."
+    return 1
+  fi
 }
 
 parse_args() {
@@ -277,6 +387,24 @@ parse_args() {
       --no-local)
         LOCAL_INSTALL=false
         LOCAL_INSTALL_CHOICE=system
+        ;;
+      --with)
+        shift
+        if (( $# == 0 )); then
+          log_err "--with requires an optional tool group."
+          print_help
+          exit 1
+        fi
+        parse_with_groups "$1" || {
+          print_help
+          exit 1
+        }
+        ;;
+      --with=*)
+        parse_with_groups "${1#--with=}" || {
+          print_help
+          exit 1
+        }
         ;;
       --upgrade)
         UPGRADE=true
@@ -346,8 +474,12 @@ apply_local_install_default() {
       ;;
     auto)
       if [[ -f "${marker}" ]]; then
-        LOCAL_INSTALL=true
-        log "Defaulting to --local because ${marker} exists"
+        if (( ${#WITH_GROUPS[@]} > 0 )); then
+          log "Ignoring local install default for this optional tool group install: ${marker}"
+        else
+          LOCAL_INSTALL=true
+          log "Defaulting to --local because ${marker} exists"
+        fi
       fi
       ;;
   esac
@@ -409,6 +541,7 @@ bootstrap() {
 
 if [[ "${SCRIPT_SOURCED}" != "true" ]]; then
   parse_args "$@"
+  validate_install_mode_options || exit 1
   apply_local_install_default
   update_local_install_default_marker
   if [[ "${LOCAL_INSTALL}" != "true" ]]; then
@@ -450,6 +583,8 @@ readonly MIB=1048576
 readonly HELIX_TEMP_MIN_FREE_BYTES=$((512 * MIB))
 readonly GIT_DELTA_TEMP_MIN_FREE_BYTES=$((64 * MIB))
 readonly BAT_TEMP_MIN_FREE_BYTES=$((64 * MIB))
+readonly KUBECTL_TEMP_MIN_FREE_BYTES=$((128 * MIB))
+readonly KUBIE_TEMP_MIN_FREE_BYTES=$((32 * MIB))
 
 TEMP_DIR_CLEANUP_ITEMS=()
 
@@ -682,6 +817,167 @@ install_release_binary_local() {
   else
     log "Installed ${tool_name} from official release asset"
   fi
+}
+
+download_size_for_url() {
+  local url="$1"
+  local download_size_bytes
+
+  download_size_bytes="$(
+    curl -fsSLI -o /dev/null -w '%{content_length_download}' "${url}" 2>/dev/null || true
+  )"
+
+  if [[ -n "${download_size_bytes}" && "${download_size_bytes}" =~ ^[0-9]+$ && ${download_size_bytes} -gt 0 ]]; then
+    printf '%s\n' "${download_size_bytes}"
+  fi
+}
+
+install_plain_binary_local() {
+  local tool_name="$1"
+  local binary_name="$2"
+  local download_url="$3"
+  local min_free_bytes="$4"
+  local checksum_url="${5:-}"
+  local download_size_bytes="${6:-}"
+  local installed="${7:-false}"
+  local binary_path="${HOME}/.local/bin/${binary_name}"
+  local checksum="" checksum_file="" downloaded_binary="" tmp_dir=""
+
+  ensure_user_local_bin_on_path
+
+  command -v curl >/dev/null 2>&1 || {
+    log "${tool_name} installer requires curl"
+    return 1
+  }
+
+  if [[ -n "${checksum_url}" ]]; then
+    command -v sha256sum >/dev/null 2>&1 || {
+      log "${tool_name} installer requires sha256sum for checksum verification"
+      return 1
+    }
+  fi
+
+  if [[ -z "${download_size_bytes}" ]] || ! [[ "${download_size_bytes}" =~ ^[0-9]+$ ]] || (( download_size_bytes <= 0 )); then
+    download_size_bytes="$(download_size_for_url "${download_url}")"
+  fi
+
+  if [[ -z "${download_size_bytes}" ]] || ! [[ "${download_size_bytes}" =~ ^[0-9]+$ ]] || (( download_size_bytes <= 0 )); then
+    download_size_bytes="${min_free_bytes}"
+  fi
+
+  if (( download_size_bytes < min_free_bytes )); then
+    download_size_bytes="${min_free_bytes}"
+  fi
+
+  create_managed_temp_dir tmp_dir "${download_size_bytes}" "${tool_name} binary download" "${binary_name}" || return 1
+  downloaded_binary="${tmp_dir}/${binary_name}"
+
+  curl -fsSL "${download_url}" -o "${downloaded_binary}"
+
+  if [[ -n "${checksum_url}" ]]; then
+    checksum_file="${tmp_dir}/${binary_name}.sha256"
+    curl -fsSL "${checksum_url}" -o "${checksum_file}"
+    checksum="$(tr -d '[:space:]' <"${checksum_file}")"
+    if [[ ! "${checksum}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+      log "${tool_name} checksum file did not contain a SHA-256 digest"
+      return 1
+    fi
+    printf '%s  %s\n' "${checksum}" "${downloaded_binary}" | sha256sum --check -
+  fi
+
+  mkdir -p "${HOME}/.local/bin"
+  install -m 0755 "${downloaded_binary}" "${binary_path}"
+
+  cleanup_temp_dir_now "${tmp_dir}"
+  if [[ "${installed}" == "true" ]]; then
+    log "Upgraded ${tool_name} from official binary release"
+  else
+    log "Installed ${tool_name} from official binary release"
+  fi
+}
+
+install_kubectl_linux_local() {
+  local arch checksum_url download_url installed=false kubectl_arch version
+  local binary_path="${HOME}/.local/bin/kubectl"
+
+  if [[ -x "${binary_path}" ]]; then
+    installed=true
+  fi
+
+  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
+    log "kubectl already installed"
+    return
+  fi
+
+  arch="$(uname -m 2>/dev/null || true)"
+  case "${arch}" in
+    x86_64|amd64)
+      kubectl_arch="amd64"
+      ;;
+    aarch64|arm64)
+      kubectl_arch="arm64"
+      ;;
+    *)
+      log "No official kubectl Linux binary is available for ${arch:-unknown}; skipping kubectl installation"
+      return
+      ;;
+  esac
+
+  command -v curl >/dev/null 2>&1 || {
+    log "kubectl installer requires curl"
+    return 1
+  }
+
+  version="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+  version="${version//$'\n'/}"
+  version="${version//$'\r'/}"
+  if [[ -z "${version}" ]]; then
+    log "Could not determine latest stable kubectl release"
+    return 1
+  fi
+
+  download_url="https://dl.k8s.io/release/${version}/bin/linux/${kubectl_arch}/kubectl"
+  checksum_url="${download_url}.sha256"
+  install_plain_binary_local "kubectl" "kubectl" "${download_url}" "${KUBECTL_TEMP_MIN_FREE_BYTES}" "${checksum_url}" "" "${installed}"
+}
+
+install_kubie_linux_local() {
+  local arch asset_name="" asset_pattern asset_size_bytes="" asset_url="" installed=false
+  local binary_path="${HOME}/.local/bin/kubie"
+
+  if [[ -x "${binary_path}" ]]; then
+    installed=true
+  fi
+
+  if [[ "${installed}" == "true" && "${UPGRADE}" != "true" ]]; then
+    log "kubie already installed"
+    return
+  fi
+
+  arch="$(uname -m 2>/dev/null || true)"
+  case "${arch}" in
+    x86_64|amd64)
+      asset_pattern="kubie-linux-amd64"
+      ;;
+    aarch64|arm64)
+      asset_pattern="kubie-linux-arm64"
+      ;;
+    armv6l|armv7l|armhf)
+      asset_pattern="kubie-linux-arm32"
+      ;;
+    *)
+      log "No official kubie Linux binary is available for ${arch:-unknown}; skipping kubie installation"
+      return
+      ;;
+  esac
+
+  resolve_github_release_asset "kubie-org/kubie" "${asset_pattern}" asset_url asset_name asset_size_bytes
+  if [[ -z "${asset_url}" ]]; then
+    log "Could not find an official kubie release asset matching ${asset_pattern}"
+    return 1
+  fi
+
+  install_plain_binary_local "kubie" "kubie" "${asset_url}" "${KUBIE_TEMP_MIN_FREE_BYTES}" "" "${asset_size_bytes}" "${installed}"
 }
 
 install_bat_local() {
@@ -1619,6 +1915,40 @@ local_install() {
   fi
 }
 
+install_k8s_tools() {
+  local os
+
+  os="$(uname -s 2>/dev/null || true)"
+  case "${os}" in
+    Darwin)
+      install_brew_k8s_packages
+      ;;
+    Linux)
+      install_kubectl_linux_local
+      install_kubie_linux_local
+      ;;
+    *)
+      log "Unsupported host for optional k8s tool group (${os:-unknown}); skipping k8s tools"
+      ;;
+  esac
+}
+
+install_optional_tool_groups() {
+  local group
+
+  for group in "${WITH_GROUPS[@]}"; do
+    case "${group}" in
+      k8s)
+        install_k8s_tools
+        ;;
+      *)
+        log "Unknown optional tool group reached installer: ${group}"
+        return 1
+        ;;
+    esac
+  done
+}
+
 main() {
   local os
   os="$(uname -s 2>/dev/null || true)"
@@ -1633,6 +1963,7 @@ main() {
   if [[ "${os}" == "Darwin" ]]; then
     ensure_brew
     install_brew_packages
+    install_optional_tool_groups
     install_brew_casks
     remove_legacy_ghostty_config_macos
   elif is_debian_apt_host; then
@@ -1640,8 +1971,10 @@ main() {
     install_git_delta_linux
     install_helix_linux
     install_uv_linux
+    install_optional_tool_groups
   else
     log "Unsupported package manager on host (${os:-unknown}); skipping package installation"
+    install_optional_tool_groups
   fi
 
   install_uv_tools

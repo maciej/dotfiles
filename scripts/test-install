@@ -35,6 +35,7 @@ with_temp_home() {
 reset_local_install_state() {
   LOCAL_INSTALL=false
   LOCAL_INSTALL_CHOICE=auto
+  WITH_GROUPS=()
 }
 
 test_creates_missing_config() {
@@ -168,6 +169,62 @@ test_no_local_clears_marker() {
 
   [[ "${LOCAL_INSTALL}" == "false" ]]
   [[ ! -e "${marker}" ]]
+}
+
+test_with_group_accepts_repeated_and_comma_separated_values() {
+  reset_local_install_state
+
+  parse_args --with k8s,k8s --with=k8s
+
+  [[ "${#WITH_GROUPS[@]}" -eq 1 ]]
+  [[ "${WITH_GROUPS[0]}" == "k8s" ]]
+}
+
+test_with_group_rejects_unknown_group() {
+  local output status
+  reset_local_install_state
+
+  output="$( ( parse_args --with nope ) 2>&1 )" && status=0 || status=$?
+
+  [[ "${status}" -ne 0 ]]
+  grep -q "Unknown optional tool group: nope" <<<"${output}"
+}
+
+test_with_group_requires_value() {
+  local output status
+  reset_local_install_state
+
+  output="$( ( parse_args --with ) 2>&1 )" && status=0 || status=$?
+
+  [[ "${status}" -ne 0 ]]
+  grep -q -- "--with requires an optional tool group." <<<"${output}"
+}
+
+test_local_with_group_is_invalid() {
+  local output status
+  reset_local_install_state
+
+  parse_args --local --with k8s
+  output="$(validate_install_mode_options 2>&1)" && status=0 || status=$?
+
+  [[ "${status}" -ne 0 ]]
+  grep -q -- "--with installs optional system tool groups and cannot be combined with --local." <<<"${output}"
+}
+
+test_with_group_ignores_local_install_default_for_this_run() {
+  local marker
+  reset_local_install_state
+  marker="$(local_install_marker_path)"
+  mkdir -p "$(dirname "${marker}")"
+  printf "local\n" >"${marker}"
+
+  parse_args --with k8s
+  validate_install_mode_options
+  apply_local_install_default
+  update_local_install_default_marker
+
+  [[ "${LOCAL_INSTALL}" == "false" ]]
+  assert_file_equals "${marker}" "local"
 }
 
 test_codex_local_installer_uses_home_scoped_env() {
@@ -404,6 +461,109 @@ test_apt_fails_when_required_package_is_unavailable() {
   assert_file_equals "${log_file}" "apt-get update"
 }
 
+make_fake_k8s_bin() {
+  local fake_bin="$1"
+
+  mkdir -p "${fake_bin}"
+
+  cat >"${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+output_file=""
+url=""
+write_out=""
+while (( $# > 0 )); do
+  case "$1" in
+    -o)
+      output_file="$2"
+      shift 2
+      ;;
+    -w)
+      write_out="$2"
+      shift 2
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "${write_out}" ]]; then
+  printf '4096'
+  exit 0
+fi
+
+case "${url}" in
+  https://dl.k8s.io/release/stable.txt)
+    printf 'v1.36.2\n'
+    ;;
+  https://dl.k8s.io/release/v1.36.2/bin/linux/amd64/kubectl)
+    printf 'kubectl binary' >"${output_file:?}"
+    ;;
+  https://dl.k8s.io/release/v1.36.2/bin/linux/amd64/kubectl.sha256)
+    printf '0000000000000000000000000000000000000000000000000000000000000000' >"${output_file:?}"
+    ;;
+  https://api.github.com/repos/kubie-org/kubie/releases/latest)
+    printf '{"assets":[{"name":"kubie-linux-amd64","browser_download_url": "https://example.test/kubie-linux-amd64","size": 4096}]}'
+    ;;
+  https://example.test/kubie-linux-amd64)
+    printf 'kubie binary' >"${output_file:?}"
+    ;;
+  *)
+    printf 'unexpected curl URL: %s\n' "${url}" >&2
+    exit 1
+    ;;
+esac
+EOF
+  chmod 755 "${fake_bin}/curl"
+
+  cat >"${fake_bin}/sha256sum" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" != "--check" ]]; then
+  printf 'unexpected sha256sum command: %s\n' "$*" >&2
+  exit 1
+fi
+cat >/dev/null
+printf 'kubectl: OK\n'
+EOF
+  chmod 755 "${fake_bin}/sha256sum"
+
+  cat >"${fake_bin}/uname" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  -s)
+    printf 'Linux\n'
+    ;;
+  -m)
+    printf 'x86_64\n'
+    ;;
+  *)
+    printf 'Linux\n'
+    ;;
+esac
+EOF
+  chmod 755 "${fake_bin}/uname"
+}
+
+test_k8s_linux_local_installers_install_binaries() {
+  local fake_bin
+
+  UPGRADE=false
+  fake_bin="${HOME}/fake-bin"
+  make_fake_k8s_bin "${fake_bin}"
+
+  PATH="${fake_bin}:${PATH}" install_kubectl_linux_local
+  PATH="${fake_bin}:${PATH}" install_kubie_linux_local
+
+  [[ -x "${HOME}/.local/bin/kubectl" ]]
+  [[ -x "${HOME}/.local/bin/kubie" ]]
+  assert_file_equals "${HOME}/.local/bin/kubectl" "kubectl binary"
+  assert_file_equals "${HOME}/.local/bin/kubie" "kubie binary"
+}
+
 test_make_rejects_unknown_install_target() {
   local output status
 
@@ -423,8 +583,14 @@ with_temp_home "local install marker defaults to HOME config" test_local_install
 with_temp_home "local install marker enables local default" test_local_install_marker_enables_local_default
 with_temp_home "explicit local writes marker" test_explicit_local_writes_marker
 with_temp_home "no local clears marker" test_no_local_clears_marker
+with_temp_home "with group accepts repeated and comma-separated values" test_with_group_accepts_repeated_and_comma_separated_values
+with_temp_home "with group rejects unknown group" test_with_group_rejects_unknown_group
+with_temp_home "with group requires value" test_with_group_requires_value
+with_temp_home "local with group is invalid" test_local_with_group_is_invalid
+with_temp_home "with group ignores local install default for this run" test_with_group_ignores_local_install_default_for_this_run
 with_temp_home "Codex local installer uses home-scoped environment" test_codex_local_installer_uses_home_scoped_env
 with_temp_home "local release installers install bat and delta" test_local_release_installers_install_bat_and_delta
 with_temp_home "apt skips unavailable optional packages" test_apt_skips_unavailable_optional_packages
 with_temp_home "apt fails when required package is unavailable" test_apt_fails_when_required_package_is_unavailable
+with_temp_home "k8s Linux local installers install binaries" test_k8s_linux_local_installers_install_binaries
 with_temp_home "make rejects unknown install target" test_make_rejects_unknown_install_target
