@@ -12,10 +12,11 @@ endif
 .PHONY: $(KNOWN_TARGETS)
 
 test: test-python
-	./scripts/test-install
+	uv run --with pytest pytest -q tests
 
 test-python:
 	cd toolbox && uv run --group dev pytest
 
 lint:
 	cd toolbox && uv run --group dev ruff check
+	uv run --with ruff ruff check --no-cache src tests

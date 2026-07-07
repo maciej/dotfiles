@@ -8,8 +8,11 @@
 ^/AGENTS\.md$
 ^/\.config/zed/settings\.json$
 ^/scripts$
+^/src$
+^/tests$
 ^/toolbox$
 ^/terminfo$
 ^/\.pytest_cache$
+^/\.ruff_cache$
 __pycache__$
 \.py[co]$
