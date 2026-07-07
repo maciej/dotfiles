@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pytest
+
 import dotfiles_install as installer
 
 from helpers import assert_executable, assert_file_equals, make_executable
@@ -45,9 +47,18 @@ def test_codex_local_installer_uses_home_scoped_env(
     )
 
 
+@pytest.mark.parametrize(
+    ("os_name", "arch"),
+    [
+        ("Linux", "x86_64"),
+        ("Darwin", "arm64"),
+    ],
+)
 def test_local_release_installers_install_bat_and_delta(
     fake_bin: Path,
     temp_home: Path,
+    os_name: str,
+    arch: str,
 ) -> None:
     make_executable(
         fake_bin / "curl",
@@ -73,10 +84,14 @@ def test_local_release_installers_install_bat_and_delta(
 
         case "${url}" in
           https://api.github.com/repos/sharkdp/bat/releases/latest)
-            printf '{"assets":[{"name":"bat-v0.0.0-x86_64-unknown-linux-gnu.tar.gz","browser_download_url":"https://example.test/bat-v0.0.0-x86_64-unknown-linux-gnu.tar.gz","size":1024}]}'
+            cat <<'JSON'
+        {"assets":[{"name":"bat-v0.0.0-x86_64-unknown-linux-gnu.tar.gz","browser_download_url":"https://example.test/bat-v0.0.0-x86_64-unknown-linux-gnu.tar.gz","size":1024},{"name":"bat-v0.0.0-aarch64-apple-darwin.tar.gz","browser_download_url":"https://example.test/bat-v0.0.0-aarch64-apple-darwin.tar.gz","size":1024}]}
+        JSON
             ;;
           https://api.github.com/repos/dandavison/delta/releases/latest)
-            printf '{"assets":[{"name":"delta-0.0.0-x86_64-unknown-linux-gnu.tar.gz","browser_download_url":"https://example.test/delta-0.0.0-x86_64-unknown-linux-gnu.tar.gz","size":1024}]}'
+            cat <<'JSON'
+        {"assets":[{"name":"delta-0.0.0-x86_64-unknown-linux-gnu.tar.gz","browser_download_url":"https://example.test/delta-0.0.0-x86_64-unknown-linux-gnu.tar.gz","size":1024},{"name":"delta-0.0.0-aarch64-apple-darwin.tar.gz","browser_download_url":"https://example.test/delta-0.0.0-aarch64-apple-darwin.tar.gz","size":1024}]}
+        JSON
             ;;
           https://example.test/*)
             printf 'fake archive' >"${output_file:?}"
@@ -130,17 +145,17 @@ def test_local_release_installers_install_bat_and_delta(
     )
     make_executable(
         fake_bin / "uname",
-        """\
+        f"""\
         #!/usr/bin/env bash
         case "${1:-}" in
           -s)
-            printf 'Linux\\n'
+            printf '{os_name}\\n'
             ;;
           -m)
-            printf 'x86_64\\n'
+            printf '{arch}\\n'
             ;;
           *)
-            printf 'Linux\\n'
+            printf '{os_name}\\n'
             ;;
         esac
         """,

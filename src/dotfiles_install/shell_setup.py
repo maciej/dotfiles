@@ -46,10 +46,7 @@ def remove_legacy_stow_targets() -> None:
 
         link_target = os.readlink(path)
         try:
-            if os.path.isabs(link_target):
-                resolved_target = Path(link_target).resolve(strict=True)
-            else:
-                resolved_target = (path.parent / link_target).resolve(strict=True)
+            resolved_target = resolve_symlink_target_lexically(path, link_target)
         except OSError:
             log(f"Could not resolve legacy symlink target; leaving it in place: {path}")
             continue
@@ -62,6 +59,13 @@ def remove_legacy_stow_targets() -> None:
             log(f"Removed legacy stow target: {path}")
         else:
             log(f"Legacy path points outside this dotfiles repo; leaving it in place: {path}")
+
+
+def resolve_symlink_target_lexically(link_path: Path, link_target: str) -> Path:
+    target_path = Path(link_target)
+    if not target_path.is_absolute():
+        target_path = link_path.parent.resolve(strict=True) / target_path
+    return Path(os.path.normpath(os.fspath(target_path)))
 
 
 def ensure_precreated_stow_directories() -> None:

@@ -1,18 +1,19 @@
 {
-  "enabledPlugins": {
-    "clangd-lsp@claude-plugins-official": true,
-    "swift-lsp@claude-plugins-official": true
+  "attribution": {
+    "commit": "",
+    "pr": ""
   },
   "permissions": {
     "defaultMode": "auto"
   },
   "model": "opus",
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": true
+  },
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true,
   "theme": "dark",
   "skipAutoPermissionPrompt": true,
-  "skipDangerousModePermissionPrompt": true,
-  "effortLevel": "high",
-  "attribution": {
-    "commit": "",
-    "pr": ""
-  }
+  "tui": "fullscreen"
 }
