@@ -301,6 +301,45 @@ if (( $+commands[sag] )); then
   }
 fi
 
+if (( $+commands[summarize] )); then
+  export SUMMARIZE_OPENAI_API_KEY_FILE="${SUMMARIZE_OPENAI_API_KEY_FILE:-$HOME/.config/summarize/openai.key}"
+  typeset -g _summarize_command="${commands[summarize]}"
+
+  summarize() {
+    local key_file="${SUMMARIZE_OPENAI_API_KEY_FILE:-}"
+
+    if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+      if [[ -z "$key_file" ]]; then
+        print -u2 "summarize: SUMMARIZE_OPENAI_API_KEY_FILE is not set. Expected $HOME/.config/summarize/openai.key"
+        return 1
+      fi
+
+      if [[ ! -r "$key_file" ]]; then
+        print -u2 "summarize: SUMMARIZE_OPENAI_API_KEY_FILE points to a missing or unreadable file: $key_file"
+        return 1
+      fi
+
+      local perms
+      perms="$(stat -f %Lp "$key_file" 2>/dev/null || stat -c %a "$key_file" 2>/dev/null)"
+      if [[ -n "$perms" && ( "${perms[-2]}" != "0" || "${perms[-1]}" != "0" ) ]]; then
+        print -u2 "summarize: warning: $key_file permissions are $perms; consider chmod 600 $key_file"
+      fi
+
+      local api_key
+      api_key="$(<"$key_file")"
+      if [[ -z "$api_key" ]]; then
+        print -u2 "summarize: SUMMARIZE_OPENAI_API_KEY_FILE is empty: $key_file"
+        return 1
+      fi
+
+      OPENAI_API_KEY="$api_key" command "$_summarize_command" "$@"
+      return
+    fi
+
+    command "$_summarize_command" "$@"
+  }
+fi
+
 # Local, machine-specific overrides.
 if [[ -o interactive ]]; then
   alias cy='codex --yolo'
