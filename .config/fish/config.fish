@@ -3,6 +3,7 @@ set -gx HOMEBREW_NO_ASK 1
 set -gx DOCKER_CLI_HINTS false
 set -gx GH_TELEMETRY false
 set -gx CLAUDE_CODE_ENABLE_AUTO_MODE 1
+set -gx CODEX_HOME "$HOME/.codex"
 
 # Keep ANSI colors when paging with less.
 if not set -q LESS
