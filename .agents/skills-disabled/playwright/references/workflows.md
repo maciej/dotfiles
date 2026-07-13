@@ -2,7 +2,7 @@
 
 Use the wrapper script and snapshot often.
 Assume `PWCLI` is set and `pwcli` is an alias for `"$PWCLI"`.
-In this repo, run commands from `output/playwright/<label>/` to keep artifacts contained.
+Follow the target repository's artifact-location convention. When none exists, use a temporary task-specific directory.
 
 ## Standard interaction loop
 

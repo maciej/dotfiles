@@ -3,4 +3,4 @@ interface:
   short_description: "Commit, push, and open a PR"
   icon_small: "./assets/gh-yeet-small.svg"
   icon_large: "./assets/gh-yeet.png"
-  default_prompt: "Use $gh-yeet to confirm the intended changes, create a focused commit, push it, and open a ready-to-review pull request."
+  default_prompt: "Use $gh-yeet to publish the intentional local changes as a focused commit and ready-to-review pull request."
