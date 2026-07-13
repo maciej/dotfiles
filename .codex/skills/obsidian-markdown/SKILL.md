@@ -14,9 +14,10 @@ Use standard Markdown normally and add only the Obsidian extensions the note nee
 [[Note Name|Display Text]]
 [[Note Name#Heading]]
 [[Note Name#^block-id]]
+[[#Heading in same note]]
 ```
 
-Use wikilinks when the vault already prefers them or the user requests them. Otherwise preserve the surrounding link style. Define a block target by appending `^block-id` to the block.
+Use wikilinks when the vault already prefers them or the user requests them. Otherwise preserve the surrounding link style. Define a paragraph block target by appending `^block-id`; for lists and quotes, place the block ID on a separate line after the block.
 
 ## Embeds
 

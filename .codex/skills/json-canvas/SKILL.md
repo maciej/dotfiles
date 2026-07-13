@@ -70,7 +70,7 @@ Use actual JSON newline escapes such as `\n` inside text strings. Do not double-
 4. Update only the requested nodes, edges, or layout region.
 5. Parse and validate the completed file.
 
-Array order controls z-order. Coordinates may be negative; `x` increases right and `y` increases down. Use consistent spacing and alignment as heuristics, not fixed requirements.
+Array order controls z-order. Coordinates may be negative; `x` increases right and `y` increases down. Group membership is visual and spatial, so position child nodes inside the group bounds. Use consistent spacing and alignment as heuristics, not fixed requirements.
 
 ## Validation
 

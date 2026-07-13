@@ -42,13 +42,28 @@ views:
 
 Omit unused top-level sections. Global filters apply to every view; a view may add its own `filters`, `groupBy`, `order`, `summaries`, or `limit`.
 
+Define custom summaries at the top level, then map displayed properties to built-in or custom summary names in a view:
+
+```yaml
+summaries:
+  mean_3dp: 'values.mean().round(3)'
+
+views:
+  - type: table
+    summaries:
+      score: mean_3dp
+      estimate: Average
+```
+
 ## Expressions
 
 - Refer to note properties as `property_name` or `note.property_name`.
 - Use `file.name`, `file.path`, `file.folder`, `file.ext`, `file.ctime`, `file.mtime`, `file.tags`, and related file properties for metadata.
 - Refer to computed values as `formula.name`, and define each one under `formulas`.
-- Combine filters with recursive `and`, `or`, and `not` objects or a single expression string.
+- Use a single expression string or a recursive filter object containing exactly one of `and`, `or`, or `not`; nest objects to combine them.
 - Guard optional properties with `if()`.
+
+`this` refers to the Base file in the main content area, the embedding note when the Base is embedded, or the active main-content file when the Base is in the sidebar.
 
 Subtracting dates returns a Duration, not a number. Access a numeric field before number operations:
 
