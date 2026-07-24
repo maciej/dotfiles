@@ -53,7 +53,7 @@ def test_youtube_video_id_from_url_rejects_unknown_urls() -> None:
 
 
 def test_cached_youtube_summary_short_circuits_metadata_load(tmp_path, monkeypatch) -> None:
-    cache_path = tmp_path / "6RplrP49uuk-gpt-5.4-mini-m.md"
+    cache_path = tmp_path / "6RplrP49uuk-gpt-5.6-luna-m.md"
     cache_path.write_text("cached summary\n", encoding="utf-8")
 
     def fail_if_called(*args: object, **kwargs: object) -> None:
@@ -161,7 +161,7 @@ def test_cached_transcript_and_metadata_avoid_metadata_fetch_for_summary(tmp_pat
 
     assert result.exit_code == 0, result.output
     assert "new cached-transcript summary" in result.output
-    assert (tmp_path / "6RplrP49uuk-gpt-5.4-mini-m.md").read_text(encoding="utf-8").strip() == (
+    assert (tmp_path / "6RplrP49uuk-gpt-5.6-luna-m.md").read_text(encoding="utf-8").strip() == (
         "new cached-transcript summary"
     )
 
