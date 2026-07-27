@@ -86,7 +86,9 @@
     "Menlo",
     ".ZedMono"
   ],
-  "buffer_line_height": "standard",
+  "buffer_line_height": {
+    "custom": 1.399999976158142
+  },
   "buffer_font_features": {
     "calt": true,
     "liga": true,
