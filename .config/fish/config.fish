@@ -26,6 +26,7 @@ else
     set -gx LESS (string join ' ' -- $less_flags)
 end
 
+fish_add_path "$HOME/.docker/bin"
 fish_add_path "$HOME/go/bin"
 fish_add_path /opt/homebrew/sbin
 fish_add_path /opt/homebrew/bin

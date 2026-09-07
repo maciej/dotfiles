@@ -25,7 +25,8 @@ ensure_preferred_path_order() {
     "/opt/homebrew/sbin" \
     "/opt/homebrew/opt/postgresql/bin" \
     "/usr/local/go/bin" \
-    "$HOME/go/bin"
+    "$HOME/go/bin" \
+    "$HOME/.docker/bin"
   do
     [[ -d "$dir" ]] && preferred_path+=("$dir")
   done
