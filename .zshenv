@@ -10,6 +10,9 @@ export HOMEBREW_NO_ASK=1
 # Enable Claude Code auto mode.
 export CLAUDE_CODE_ENABLE_AUTO_MODE=1
 
+# Enable EXA web search for opencode.
+export OPENCODE_ENABLE_EXA=1
+
 # Use the Stow-managed Codex home consistently across shells.
 export CODEX_HOME="$HOME/.codex"
 
