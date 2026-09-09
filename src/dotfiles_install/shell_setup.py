@@ -37,28 +37,53 @@ def validate_legacy_stow_targets() -> None:
 
 def remove_legacy_stow_targets() -> None:
     for path in home_relative_paths(LEGACY_STOW_PATHS):
-        if not path.is_symlink():
-            if path.exists():
-                log(f"Legacy path exists but is not a symlink; leaving it in place: {path}")
-            else:
-                log(f"No legacy stow target found: {path}")
-            continue
-
-        link_target = os.readlink(path)
-        try:
-            resolved_target = resolve_symlink_target_lexically(path, link_target)
-        except OSError:
-            log(f"Could not resolve legacy symlink target; leaving it in place: {path}")
-            continue
-
-        if resolved_target == state.DOTFILES_DIR or path_is_inside(
-            resolved_target,
-            state.DOTFILES_DIR,
-        ):
-            path.unlink()
-            log(f"Removed legacy stow target: {path}")
+        if path.is_symlink():
+            remove_legacy_symlink(path)
+        elif path.is_dir():
+            remove_legacy_stow_directory(path)
+        elif path.exists():
+            log(f"Legacy path exists but is not a symlink; leaving it in place: {path}")
         else:
-            log(f"Legacy path points outside this dotfiles repo; leaving it in place: {path}")
+            log(f"No legacy stow target found: {path}")
+
+
+def remove_legacy_symlink(path: Path) -> None:
+    link_target = os.readlink(path)
+    try:
+        resolved_target = resolve_symlink_target_lexically(path, link_target)
+    except OSError:
+        log(f"Could not resolve legacy symlink target; leaving it in place: {path}")
+        return
+
+    if resolved_target == state.DOTFILES_DIR or path_is_inside(
+        resolved_target,
+        state.DOTFILES_DIR,
+    ):
+        path.unlink()
+        log(f"Removed legacy stow target: {path}")
+    else:
+        log(f"Legacy path points outside this dotfiles repo; leaving it in place: {path}")
+
+
+def remove_legacy_stow_directory(path: Path) -> None:
+    for directory, dirnames, filenames in os.walk(path, followlinks=False):
+        for name in [*dirnames, *filenames]:
+            entry = Path(directory) / name
+            if not entry.is_symlink():
+                log(f"Legacy path contains a non-symlink entry; leaving it in place: {entry}")
+                continue
+            remove_legacy_symlink(entry)
+    prune_empty_legacy_directories(path)
+
+
+def prune_empty_legacy_directories(path: Path) -> None:
+    directories = [path]
+    for directory, _dirnames, _filenames in os.walk(path, followlinks=False):
+        directories.append(Path(directory))
+    for entry in sorted(directories, key=lambda item: len(item.parts), reverse=True):
+        if entry.is_dir() and not entry.is_symlink() and not any(entry.iterdir()):
+            entry.rmdir()
+            log(f"Removed empty legacy directory: {entry}")
 
 
 def resolve_symlink_target_lexically(link_path: Path, link_target: str) -> Path:
