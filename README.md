@@ -34,8 +34,13 @@ The local install currently installs `bat`, `delta`, and Helix from upstream
 release archives into `~/.local/bin`, copies the Helix runtime into
 `~/.config/helix/runtime`, installs the Codex CLI standalone package under
 `~/.codex/packages/standalone` with a `~/.local/bin/codex` launcher, and links
-dotfiles with Stow. Obsidian skills are tracked directly under `.codex/skills/`,
-so Stow links them into `~/.codex/skills` with the rest of the dotfiles.
+dotfiles with Stow. Skills are tracked directly under `.codex/skills/`,
+so Stow links them into `~/.codex/skills` with the rest of the dotfiles. The
+Obsidian-related skills (`obsidian-cli`, `obsidian-bases`, `obsidian-markdown`,
+`json-canvas`) and the GitHub workflow skills (`github`, `gh-address-comments`,
+`gh-fix-ci`, `gh-yeet`) are also exposed through symlinks under
+`.agents/skills/`, so Stow links them into `~/.agents/skills` for
+agent-agnostic use.
 
 ### Editor
 
