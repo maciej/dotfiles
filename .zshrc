@@ -343,6 +343,7 @@ fi
 # Local, machine-specific overrides.
 if [[ -o interactive ]]; then
   alias cy='codex --yolo'
+  alias oc='opencode'
 fi
 
 if [[ -f "$HOME/.zshrc.local" ]]; then

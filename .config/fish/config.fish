@@ -104,6 +104,10 @@ if command -q himalaya
     end
 end
 
+if command -q opencode
+    alias oc opencode
+end
+
 # Local, machine-specific overrides.
 if test -f "$HOME/.config/fish/config.local.fish"
     source "$HOME/.config/fish/config.local.fish"
