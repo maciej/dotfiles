@@ -13,6 +13,11 @@ export CLAUDE_CODE_ENABLE_AUTO_MODE=1
 # Enable EXA web search for opencode.
 export OPENCODE_ENABLE_EXA=1
 
+# Optional machine-local OpenCode config layer (provider/model overrides).
+if [[ -f "$HOME/.config/opencode/opencode.local.json" ]]; then
+  export OPENCODE_CONFIG="$HOME/.config/opencode/opencode.local.json"
+fi
+
 # Use the Stow-managed Codex home consistently across shells.
 export CODEX_HOME="$HOME/.codex"
 
