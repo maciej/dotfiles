@@ -4,9 +4,9 @@ import os
 import subprocess
 from pathlib import Path
 
-import dotfiles_install as installer
-
 from helpers import assert_file_equals, require_ssh
+
+import dotfiles_install as installer
 
 
 def test_creates_missing_config(temp_home: Path) -> None:

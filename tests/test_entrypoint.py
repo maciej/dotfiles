@@ -21,8 +21,7 @@ def test_install_sh_delegates_to_uv_script(temp_home: Path) -> None:
     result = subprocess.run(
         ["bash", str(ROOT_DIR / "install.sh"), "--local"],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

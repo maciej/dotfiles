@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from . import state
 from .config import (
@@ -91,7 +91,7 @@ def ensure_brew() -> None:
 
 def package_list_installed(output: str, package: str) -> bool:
     return any(
-        line.startswith(f"{package} ") or line.startswith(f"{package}@")
+        line.startswith((f"{package} ", f"{package}@"))
         for line in output.splitlines()
     )
 
@@ -108,9 +108,7 @@ def install_brew_package_list(label: str, packages: Sequence[str]) -> None:
     missing: list[str] = []
 
     for package in packages:
-        if package_list_installed(installed, package):
-            log(f"Already installed: {package}")
-        elif run(
+        if package_list_installed(installed, package) or run(
             ["brew", "list", "--versions", package],
             check=False,
             capture=True,

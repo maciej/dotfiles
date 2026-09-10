@@ -4,10 +4,9 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from helpers import assert_executable, assert_file_equals, make_executable
 
 import dotfiles_install as installer
-
-from helpers import assert_executable, assert_file_equals, make_executable
 
 
 def test_codex_local_installer_uses_home_scoped_env(

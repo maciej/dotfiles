@@ -9,6 +9,10 @@ ifneq ($(UNKNOWN_TARGETS),)
 $(error Unknown target(s): $(UNKNOWN_TARGETS))
 endif
 
+# Pin the root-level ruff so the lint gate uses a reproducible rule set.
+# Bump deliberately and fix any new findings in the same change.
+RUFF_VERSION ?= 0.16.6
+
 .PHONY: $(KNOWN_TARGETS)
 
 test: test-python
@@ -19,4 +23,4 @@ test-python:
 
 lint:
 	cd toolbox && uv run --group dev ruff check
-	uv run --with ruff ruff check --no-cache src tests
+	uv run --with ruff==$(RUFF_VERSION) ruff check --no-cache src tests

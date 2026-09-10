@@ -4,10 +4,9 @@ import os
 from pathlib import Path
 
 import pytest
+from helpers import assert_file_equals, make_executable
 
 import dotfiles_install as installer
-
-from helpers import assert_file_equals, make_executable
 
 
 @pytest.fixture

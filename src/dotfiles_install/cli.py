@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shlex
 import subprocess
-from typing import Sequence
+from collections.abc import Sequence
 
 from . import state
 from .core import ensure_user_local_bin_on_path, log, log_err, uname

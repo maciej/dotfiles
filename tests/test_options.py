@@ -4,10 +4,9 @@ import os
 from pathlib import Path
 
 import pytest
+from helpers import assert_file_equals
 
 import dotfiles_install as installer
-
-from helpers import assert_file_equals
 
 
 def test_local_install_marker_uses_xdg_config_home(

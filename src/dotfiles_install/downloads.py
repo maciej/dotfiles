@@ -6,12 +6,19 @@ import os
 import re
 import shutil
 import tempfile
+from collections.abc import Iterable
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable
 
 from .config import MIB
-from .core import ensure_user_local_bin_on_path, home_dir, is_executable, log, log_err, run
+from .core import (
+    ensure_user_local_bin_on_path,
+    home_dir,
+    is_executable,
+    log,
+    log_err,
+    run,
+)
 from .errors import InstallerError
 
 

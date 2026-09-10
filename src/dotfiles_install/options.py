@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
 
 from .config import HELP_TEXT, KNOWN_WITH_GROUPS
 from .core import home_dir, log

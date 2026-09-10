@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from helpers import ROOT_DIR
 
 import dotfiles_install as installer

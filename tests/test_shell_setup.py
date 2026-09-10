@@ -3,8 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from dotfiles_install import state
-from dotfiles_install import shell_setup
+from dotfiles_install import shell_setup, state
 
 
 def test_removes_broken_legacy_stow_symlink(temp_home: Path, monkeypatch) -> None:
