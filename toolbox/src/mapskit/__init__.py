@@ -463,8 +463,12 @@ def locations_save(
         location["lat_lng"] = {"latitude": lat, "longitude": lng}
     try:
         store = load_locations_file(config.locations_file)
-        store.setdefault("locations", {})[name.strip()] = {
-            key: value for key, value in location.items() if value not in {"", None}
+        locations = store.setdefault("locations", {})
+        saved_name, _ = lookup_location(store, name)
+        if saved_name not in locations:
+            saved_name = name.strip()
+        locations[saved_name] = {
+            field: value for field, value in location.items() if value not in ("", None)
         }
         save_locations_file(config.locations_file, store)
     except MapsKitError as exc:
@@ -523,6 +527,8 @@ def load_api_key(path: Path) -> str:
         raise MapsKitError(
             f"missing API key file {path}; set {API_KEY_FILE_ENV} or --api-key-file"
         ) from exc
+    except OSError as exc:
+        raise MapsKitError(f"read API key file {path}: {exc}") from exc
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
@@ -536,6 +542,8 @@ def load_locations_file(path: Path) -> dict[str, Any]:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return {"version": 1, "locations": {}}
+    except OSError as exc:
+        raise MapsKitError(f"read saved locations: {exc}") from exc
     try:
         data = yaml.safe_load(raw) or {}
     except yaml.YAMLError as exc:

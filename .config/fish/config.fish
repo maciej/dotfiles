@@ -69,7 +69,6 @@ else
 end
 
 set -x LANG en_US.UTF-8
-set -x LC_ALL en_US.UTF-8
 set -x LC_TIME pl_PL.UTF-8
 
 if test (uname -s) = Darwin

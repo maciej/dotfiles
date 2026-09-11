@@ -7,6 +7,12 @@
 ^/\.idea$
 ^/AGENTS\.md$
 ^/\.config/zed/settings\.json$
+^/\.config/opencode/node_modules$
+^/\.config/opencode/package\.json$
+^/\.config/opencode/package-lock\.json$
+^/\.config/opencode/bun\.lock$
+^/\.config/opencode/opencode\.local\.json$
+^/\.config/opencode/\.gitignore$
 ^/scripts$
 ^/src$
 ^/tests$

@@ -136,7 +136,11 @@ deploy_local() {
   fi
 
   log "Deploying locally"
-  bash "${ROOT_DIR}/install.sh" "${install_args[@]}"
+  if (( ${#install_args[@]} > 0 )); then
+    bash "${ROOT_DIR}/install.sh" "${install_args[@]}"
+  else
+    bash "${ROOT_DIR}/install.sh"
+  fi
 }
 
 main() {
@@ -145,7 +149,10 @@ main() {
   local failure_count=0
 
   parse_args "$@"
-  deploy_local
+  if ! deploy_local; then
+    warn "Local install failed; aborting deployment"
+    exit 1
+  fi
 
   if [[ ! -r "${HOSTS_FILE}" ]]; then
     warn "Host inventory file is missing or unreadable: ${HOSTS_FILE}"

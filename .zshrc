@@ -38,7 +38,7 @@ ls() {
   [[ -n "$color_opt" ]] && args+=("$color_opt")
   [[ -n "$indicators_opt" ]] && args+=("$indicators_opt")
 
-  if [[ -n "${CLICOLOR_FORCE-}" && ! -t 1 ]]; then
+  if [[ -z "${CLICOLOR_FORCE-}" && ! -t 1 ]]; then
     args=(${args:#"$color_opt"})
   fi
 

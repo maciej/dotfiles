@@ -79,6 +79,29 @@ def test_clean_json_removes_empty_route_fields() -> None:
     ) == {"origin": {"address": "A"}, "destination": {"address": "B"}}
 
 
+def test_locations_save_with_lat_lng_updates_existing_name_case_insensitively(
+    tmp_path: Path,
+) -> None:
+    locations_file = tmp_path / "locations.yaml"
+    base = [
+        "--api-key-file",
+        str(tmp_path / "missing.key"),
+        "--locations-file",
+        str(locations_file),
+        "locations",
+        "save",
+    ]
+
+    assert mapskit.run(base + ["Home", "--lat", "52.1", "--lng", "21.0"], io.StringIO(), io.StringIO()) == 0
+    assert mapskit.run(base + ["home", "--lat", "1.0", "--lng", "2.0"], io.StringIO(), io.StringIO()) == 0
+
+    loaded = mapskit.load_locations_file(locations_file)
+    assert list(loaded["locations"]) == ["Home"]
+    _, location = mapskit.lookup_location(loaded, "HOME")
+    assert location is not None
+    assert location["lat_lng"] == {"latitude": 1.0, "longitude": 2.0}
+
+
 def test_locations_save_does_not_need_api_key(tmp_path: Path) -> None:
     locations_file = tmp_path / "locations.yaml"
     stdout = io.StringIO()

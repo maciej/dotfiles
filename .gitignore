@@ -4,3 +4,5 @@
 *.iml
 .vscode
 __pycache__/
+# Machine-local OpenCode config layer (provider/model overrides).
+.config/opencode/opencode.local.json
