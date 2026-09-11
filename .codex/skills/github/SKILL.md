@@ -13,6 +13,10 @@ Use `gh pr`, `gh issue`, and `gh repo` for repository orientation, metadata, dif
 
 For read requests, return the relevant state and likely next action. For writes, apply only the requested mutation to the resolved target and verify it with a read-back.
 
+## Comment convention
+
+When commenting in the user's name on a PR in a repository that is non-public and not part of the user's org (github.com/maciej), always prefix the comment with ✨ to mark the text as agent-authored. Exception: when the user spells out the comment verbatim and asks to post it as is or only with stylistic or grammar corrections, post it without the prefix.
+
 ## Route Focused Work
 
 - Unresolved review threads or requested changes: use `../gh-address-comments/SKILL.md`.
