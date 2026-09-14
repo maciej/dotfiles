@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -78,15 +79,40 @@ def ensure_brew() -> None:
             ]
         )
 
-    for brew_path in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
-        if is_executable(Path(brew_path)):
-            output = run([brew_path, "shellenv"], capture=True).stdout
-            for line in output.splitlines():
-                match = re.match(r"^export ([A-Za-z_][A-Za-z0-9_]*)=(.*)$", line)
-                if match is None:
-                    continue
-                name, value = match.groups()
-                os.environ[name] = os.path.expandvars(value.strip('"'))
+    brew_path = shutil.which("brew")
+    if brew_path is None:
+        brew_path = next(
+            (
+                path for path in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew")
+                if is_executable(Path(path))
+            ),
+            None,
+        )
+    if brew_path is None:
+        raise InstallerError("Homebrew executable not found after installation")
+
+    # shellenv emits shell code, including parameter expansions and conditionals.
+    # Evaluate it with its requested shell instead of parsing export statements.
+    output = run(
+        [
+            "/bin/bash",
+            "-c",
+            (
+                'brew_env=$("$1" shellenv bash) || exit $?\n'
+                'eval "$brew_env" || exit $?\n'
+                '/usr/bin/env -0'
+            ),
+            "dotfiles-brew-env",
+            brew_path,
+        ],
+        capture=True,
+    ).stdout
+    for entry in output.split("\0"):
+        name, separator, value = entry.partition("=")
+        if separator and (name.startswith("HOMEBREW_") or name in {
+            "PATH", "MANPATH", "INFOPATH",
+        }):
+            os.environ[name] = value
 
 
 def package_list_installed(output: str, package: str) -> bool:
