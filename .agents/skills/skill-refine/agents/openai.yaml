@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Refine"
+  short_description: "Distill completed sessions into reusable skill updates"
+  default_prompt: "Review this completed session for reusable procedural lessons and propose skill updates."
