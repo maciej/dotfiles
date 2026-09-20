@@ -317,6 +317,13 @@ def route(
         list[str] | None,
         typer.Option("--via", help="Intermediate waypoint; repeat for multiple hops."),
     ] = None,
+    detour: Annotated[
+        bool,
+        typer.Option(
+            "--detour",
+            help="Compare a route with --via to an additional direct route request.",
+        ),
+    ] = False,
     mode: Annotated[str, typer.Option("--mode", help="Travel mode.")] = "DRIVE",
     routing_preference: Annotated[
         str,
@@ -364,6 +371,8 @@ def route(
 
     if not from_waypoint or not to_waypoint:
         fail(MapsKitError("route requires origin and destination"))
+    if detour and not via_waypoints:
+        fail(MapsKitError("--detour requires at least one --via waypoint"))
     if alternatives and via_waypoints:
         fail(
             MapsKitError(
@@ -402,14 +411,24 @@ def route(
             body["routeModifiers"] = route_modifiers
         if polyline:
             fields = append_field_mask(fields, ROUTE_POLYLINE_FIELD)
-        response = google_client(config).compute_routes(clean_json(body), fields)
+        client = google_client(config)
+        response = client.compute_routes(clean_json(body), fields)
+        direct_response = None
+        if detour:
+            direct_body = dict(body)
+            direct_body["intermediates"] = []
+            direct_body["optimizeWaypointOrder"] = False
+            direct_response = client.compute_routes(clean_json(direct_body), fields)
     except MapsKitError as exc:
         fail(exc)
 
     if config.json:
-        print_json(sys.stdout, response)
+        if direct_response is None:
+            print_json(sys.stdout, response)
+        else:
+            print_json(sys.stdout, {"via": response, "direct": direct_response})
         return
-    print_routes(sys.stdout, response)
+    print_routes(sys.stdout, response, direct_response)
 
 
 @locations_app.command("list")
@@ -755,8 +774,13 @@ def print_place_details(stream: TextIO, place: dict[str, Any]) -> None:
             stream.write(f"  {line}\n")
 
 
-def print_routes(stream: TextIO, response: dict[str, Any]) -> None:
+def print_routes(
+    stream: TextIO,
+    response: dict[str, Any],
+    direct_response: dict[str, Any] | None = None,
+) -> None:
     routes = response.get("routes") or []
+    direct_routes = (direct_response or {}).get("routes") or []
     if not routes:
         stream.write("No routes found.\n")
         return
@@ -780,6 +804,9 @@ def print_routes(stream: TextIO, response: dict[str, Any]) -> None:
             if (localized.get("duration") or {}).get("text"):
                 duration = localized["duration"]["text"]
             stream.write(f"  leg {leg_index}: {distance}, {duration}\n")
+        if direct_response is not None:
+            direct_route = direct_routes[index - 1] if index <= len(direct_routes) else None
+            print_detour(stream, route, direct_route)
         if route.get("optimizedIntermediateWaypointIndex"):
             stream.write(
                 "  optimized via order: "
@@ -792,6 +819,46 @@ def print_routes(stream: TextIO, response: dict[str, Any]) -> None:
             stream.write(f"  encodedPolyline: {encoded}\n")
     if response.get("geocodingResults"):
         print_geocoding_results(stream, response["geocodingResults"])
+
+
+def print_detour(
+    stream: TextIO,
+    via_route: dict[str, Any],
+    direct_route: dict[str, Any] | None,
+) -> None:
+    if direct_route is None:
+        stream.write("  detour: unavailable because the direct request returned no route\n")
+        return
+
+    via_description = via_route.get("description")
+    direct_description = direct_route.get("description")
+    if via_description != direct_description:
+        stream.write(
+            "  detour: not comparable because route descriptions differ "
+            f"(via: {via_description or '(none)'}; "
+            f"direct: {direct_description or '(none)'})\n"
+        )
+        return
+
+    via_duration = duration_seconds(via_route.get("duration"))
+    direct_duration = duration_seconds(direct_route.get("duration"))
+    if (
+        via_duration is None
+        or direct_duration is None
+        or "distanceMeters" not in via_route
+        or "distanceMeters" not in direct_route
+    ):
+        stream.write("  detour: unavailable because route totals are missing\n")
+        return
+
+    duration_delta = via_duration - direct_duration
+    distance_delta = via_route["distanceMeters"] - direct_route["distanceMeters"]
+    stream.write(
+        f"  detour: {signed_duration(duration_delta)}, "
+        f"{signed_distance(distance_delta)} "
+        f"(direct {human_distance(direct_route['distanceMeters'])}, "
+        f"{human_duration(direct_route['duration'])})\n"
+    )
 
 
 def print_geocoding_results(stream: TextIO, geocoding: dict[str, Any]) -> None:
@@ -868,6 +935,20 @@ def human_distance(meters: int | float) -> str:
     return f"{meters} m"
 
 
+def signed_distance(meters: int | float) -> str:
+    sign = "+" if meters >= 0 else "-"
+    return sign + human_distance(abs(meters))
+
+
+def duration_seconds(raw: Any) -> float | None:
+    if not isinstance(raw, str) or not raw.endswith("s"):
+        return None
+    try:
+        return float(raw[:-1])
+    except ValueError:
+        return None
+
+
 def human_duration(raw: str) -> str:
     if not raw:
         return "unknown duration"
@@ -888,6 +969,11 @@ def human_duration(raw: str) -> str:
     if hours:
         return f"{hours}h"
     return f"{minutes}m"
+
+
+def signed_duration(seconds: int | float) -> str:
+    sign = "+" if seconds >= 0 else "-"
+    return sign + human_duration(f"{abs(seconds)}s")
 
 
 def now_utc() -> str:
