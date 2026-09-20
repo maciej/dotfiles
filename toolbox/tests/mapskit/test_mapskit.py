@@ -6,6 +6,22 @@ from pathlib import Path
 import mapskit
 
 
+class RecordingGoogleClient:
+    def __init__(self) -> None:
+        self.search_fields = ""
+        self.info_fields = ""
+
+    def search_text(self, body, field_mask: str) -> dict:
+        self.search_fields = field_mask
+        return {"places": []}
+
+    def place_details(
+        self, place_id: str, field_mask: str, language: str, region: str
+    ) -> dict:
+        self.info_fields = field_mask
+        return {}
+
+
 def test_default_api_key_file_uses_google_maps_platform_name(
     monkeypatch,
 ) -> None:
@@ -31,6 +47,66 @@ def test_help_is_plain_click_text() -> None:
     assert "Commands:" in stdout.getvalue()
     assert "╭" not in stdout.getvalue()
     assert stderr.getvalue() == ""
+
+
+def test_places_subcommands_use_endpoint_specific_default_field_masks(
+    monkeypatch,
+) -> None:
+    client = RecordingGoogleClient()
+    monkeypatch.setattr(mapskit, "google_client", lambda config: client)
+
+    assert mapskit.run(["places", "search", "coffee"], io.StringIO(), io.StringIO()) == 0
+    assert mapskit.run(["places", "info", "ChIJ123"], io.StringIO(), io.StringIO()) == 0
+
+    assert client.search_fields == mapskit.DEFAULT_PLACES_SEARCH_FIELDS
+    assert client.info_fields == mapskit.DEFAULT_PLACE_DETAILS_FIELDS
+    assert all(
+        field == "nextPageToken" or field.startswith("places.")
+        for field in client.search_fields.split(",")
+    )
+    assert all(not field.startswith("places.") for field in client.info_fields.split(","))
+
+
+def test_places_subcommands_document_endpoint_specific_field_masks() -> None:
+    search_stdout = io.StringIO()
+    info_stdout = io.StringIO()
+
+    assert mapskit.run(["places", "search", "--help"], search_stdout, io.StringIO()) == 0
+    assert mapskit.run(["places", "info", "--help"], info_stdout, io.StringIO()) == 0
+
+    search_help = " ".join(search_stdout.getvalue().split())
+    info_help = " ".join(info_stdout.getvalue().split())
+    assert "require the places. prefix" in search_help
+    assert "must be unprefixed" in info_help
+    assert "surface as API errors" in search_help
+    assert "surface as API errors" in info_help
+
+
+def test_places_subcommands_pass_caller_fields_through_unchanged(monkeypatch) -> None:
+    client = RecordingGoogleClient()
+    monkeypatch.setattr(mapskit, "google_client", lambda config: client)
+
+    search_fields = "id,displayName"
+    info_fields = "places.id,places.displayName"
+    assert (
+        mapskit.run(
+            ["places", "search", "--fields", search_fields, "coffee"],
+            io.StringIO(),
+            io.StringIO(),
+        )
+        == 0
+    )
+    assert (
+        mapskit.run(
+            ["places", "info", "--fields", info_fields, "ChIJ123"],
+            io.StringIO(),
+            io.StringIO(),
+        )
+        == 0
+    )
+
+    assert client.search_fields == search_fields
+    assert client.info_fields == info_fields
 
 
 def test_locations_round_trip_uses_private_permissions(tmp_path: Path) -> None:
