@@ -28,11 +28,12 @@ DEFAULT_PLACE_DETAILS_FIELDS = (
 )
 DEFAULT_ROUTE_FIELDS = (
     "routes.routeLabels,routes.distanceMeters,routes.duration,routes.staticDuration,"
-    "routes.description,routes.warnings,routes.polyline.encodedPolyline,"
+    "routes.description,routes.warnings,"
     "routes.legs.distanceMeters,routes.legs.duration,routes.legs.staticDuration,"
     "routes.legs.localizedValues,routes.optimizedIntermediateWaypointIndex,"
     "geocodingResults"
 )
+ROUTE_POLYLINE_FIELD = "routes.polyline.encodedPolyline"
 
 PLACES_SEARCH_ENDPOINT = "https://places.googleapis.com/v1/places:searchText"
 PLACE_DETAILS_ENDPOINT = "https://places.googleapis.com/v1/places/"
@@ -242,9 +243,17 @@ def places_search(
         list[str] | None,
         typer.Argument(metavar="QUERY", help="Search query words."),
     ] = None,
-    fields: Annotated[str, typer.Option("--fields", help="Places field mask.")] = (
-        DEFAULT_PLACES_SEARCH_FIELDS
-    ),
+    fields: Annotated[
+        str,
+        typer.Option(
+            "--fields",
+            help=(
+                "Text Search field mask passed through to the API; place fields "
+                "require the places. prefix. Unrecognised fields surface as API "
+                "errors."
+            ),
+        ),
+    ] = DEFAULT_PLACES_SEARCH_FIELDS,
     language: Annotated[str, typer.Option("--language", help="BCP-47 language code.")] = "",
     region: Annotated[str, typer.Option("--region", help="Two-character region code.")] = "",
     page_token: Annotated[
@@ -252,22 +261,63 @@ def places_search(
         typer.Option("--page-token", help="nextPageToken from a previous search."),
     ] = "",
     limit: Annotated[int, typer.Option("--limit", min=1, max=20)] = 5,
+    near: Annotated[
+        str,
+        typer.Option(
+            "--near",
+            help=(
+                "Circle center as <lat,lng> or a saved location name. "
+                "Biases results; it does not restrict them."
+            ),
+        ),
+    ] = "",
+    radius: Annotated[
+        float | None,
+        typer.Option(
+            "--radius",
+            help="Circle bias radius in metres; required with --near.",
+        ),
+    ] = None,
+    rect: Annotated[
+        str,
+        typer.Option(
+            "--rect",
+            help=(
+                "Hard restriction rectangle as "
+                "<sw_lat,sw_lng,ne_lat,ne_lng>; restriction supports rectangles only."
+            ),
+        ),
+    ] = "",
 ) -> None:
     config = get_config(ctx)
     query = " ".join(query_words or []).strip()
     if not query and not page_token:
         fail(MapsKitError("places search requires a query"))
+    if near and rect:
+        fail(MapsKitError("set either --near/--radius or --rect, not both"))
+    if bool(near) != (radius is not None):
+        fail(MapsKitError("set both --near and --radius"))
+    if radius is not None and radius <= 0:
+        fail(MapsKitError("--radius must be greater than zero"))
     try:
-        response = google_client(config).search_text(
-            {
-                "textQuery": query,
-                "pageSize": limit,
-                "pageToken": page_token,
-                "languageCode": language,
-                "regionCode": region,
-            },
-            fields,
-        )
+        body: dict[str, Any] = {
+            "textQuery": query,
+            "pageSize": limit,
+            "pageToken": page_token,
+            "languageCode": language,
+            "regionCode": region,
+        }
+        if near:
+            locations = load_locations_file(config.locations_file)
+            body["locationBias"] = {
+                "circle": {
+                    "center": point_from_input(near, locations),
+                    "radius": radius,
+                }
+            }
+        if rect:
+            body["locationRestriction"] = {"rectangle": parse_rectangle(rect)}
+        response = google_client(config).search_text(body, fields)
     except MapsKitError as exc:
         fail(exc)
     if config.json:
@@ -285,9 +335,16 @@ def places_search(
 def places_info(
     ctx: typer.Context,
     place_id: Annotated[str, typer.Argument(help="Google place ID.")],
-    fields: Annotated[str, typer.Option("--fields", help="Place Details field mask.")] = (
-        DEFAULT_PLACE_DETAILS_FIELDS
-    ),
+    fields: Annotated[
+        str,
+        typer.Option(
+            "--fields",
+            help=(
+                "Place Details field mask passed through to the API; field names "
+                "must be unprefixed. Unrecognised fields surface as API errors."
+            ),
+        ),
+    ] = DEFAULT_PLACE_DETAILS_FIELDS,
     language: Annotated[str, typer.Option("--language", help="BCP-47 language code.")] = "",
     region: Annotated[str, typer.Option("--region", help="Two-character region code.")] = "",
 ) -> None:
@@ -316,6 +373,13 @@ def route(
         list[str] | None,
         typer.Option("--via", help="Intermediate waypoint; repeat for multiple hops."),
     ] = None,
+    detour: Annotated[
+        bool,
+        typer.Option(
+            "--detour",
+            help="Compare a route with --via to an additional direct route request.",
+        ),
+    ] = False,
     mode: Annotated[str, typer.Option("--mode", help="Travel mode.")] = "DRIVE",
     routing_preference: Annotated[
         str,
@@ -338,6 +402,13 @@ def route(
     fields: Annotated[str, typer.Option("--fields", help="Routes API field mask.")] = (
         DEFAULT_ROUTE_FIELDS
     ),
+    polyline: Annotated[
+        bool,
+        typer.Option(
+            "--polyline",
+            help="Include the encoded polyline, appending it to --fields if needed.",
+        ),
+    ] = False,
     departure: Annotated[str, typer.Option("--departure", help="RFC3339 departure time.")] = "",
     arrival: Annotated[
         str,
@@ -356,6 +427,8 @@ def route(
 
     if not from_waypoint or not to_waypoint:
         fail(MapsKitError("route requires origin and destination"))
+    if detour and not via_waypoints:
+        fail(MapsKitError("--detour requires at least one --via waypoint"))
     if alternatives and via_waypoints:
         fail(
             MapsKitError(
@@ -392,14 +465,26 @@ def route(
         }
         if any(route_modifiers.values()):
             body["routeModifiers"] = route_modifiers
-        response = google_client(config).compute_routes(clean_json(body), fields)
+        if polyline:
+            fields = append_field_mask(fields, ROUTE_POLYLINE_FIELD)
+        client = google_client(config)
+        response = client.compute_routes(clean_json(body), fields)
+        direct_response = None
+        if detour:
+            direct_body = dict(body)
+            direct_body["intermediates"] = []
+            direct_body["optimizeWaypointOrder"] = False
+            direct_response = client.compute_routes(clean_json(direct_body), fields)
     except MapsKitError as exc:
         fail(exc)
 
     if config.json:
-        print_json(sys.stdout, response)
+        if direct_response is None:
+            print_json(sys.stdout, response)
+        else:
+            print_json(sys.stdout, {"via": response, "direct": direct_response})
         return
-    print_routes(sys.stdout, response)
+    print_routes(sys.stdout, response, direct_response)
 
 
 @locations_app.command(
@@ -658,6 +743,35 @@ def parse_lat_lng(raw: str) -> dict[str, float] | None:
         return None
 
 
+def point_from_input(raw: str, store: dict[str, Any]) -> dict[str, float]:
+    _, location = lookup_location(store, raw)
+    if location is not None:
+        point = location.get("lat_lng")
+        if point is None:
+            raise MapsKitError(
+                f"saved location {raw!r} has no coordinates; save it with --lat/--lng"
+            )
+        return point
+    point = parse_lat_lng(raw)
+    if point is None:
+        raise MapsKitError("--near must be <lat,lng> or a saved location name")
+    return point
+
+
+def parse_rectangle(raw: str) -> dict[str, dict[str, float]]:
+    parts = [part.strip() for part in raw.split(",")]
+    if len(parts) != 4:
+        raise MapsKitError("--rect must be <sw_lat,sw_lng,ne_lat,ne_lng>")
+    try:
+        sw_lat, sw_lng, ne_lat, ne_lng = (float(part) for part in parts)
+    except ValueError as exc:
+        raise MapsKitError("--rect must be <sw_lat,sw_lng,ne_lat,ne_lng>") from exc
+    return {
+        "low": {"latitude": sw_lat, "longitude": sw_lng},
+        "high": {"latitude": ne_lat, "longitude": ne_lng},
+    }
+
+
 def looks_like_place_id(raw: str) -> bool:
     if any(char.isspace() or char == "," for char in raw):
         return False
@@ -697,6 +811,13 @@ def display_path(path: Path) -> str:
 
 def compact_field_mask(mask: str) -> str:
     return ",".join(part.strip() for part in mask.split(",") if part.strip())
+
+
+def append_field_mask(mask: str, field: str) -> str:
+    fields = compact_field_mask(mask).split(",")
+    if field not in fields:
+        fields.append(field)
+    return ",".join(fields)
 
 
 def clean_json(value: Any) -> Any:
@@ -772,8 +893,13 @@ def print_place_details(stream: TextIO, place: dict[str, Any]) -> None:
             stream.write(f"  {line}\n")
 
 
-def print_routes(stream: TextIO, response: dict[str, Any]) -> None:
+def print_routes(
+    stream: TextIO,
+    response: dict[str, Any],
+    direct_response: dict[str, Any] | None = None,
+) -> None:
     routes = response.get("routes") or []
+    direct_routes = (direct_response or {}).get("routes") or []
     if not routes:
         stream.write("No routes found.\n")
         return
@@ -797,6 +923,9 @@ def print_routes(stream: TextIO, response: dict[str, Any]) -> None:
             if (localized.get("duration") or {}).get("text"):
                 duration = localized["duration"]["text"]
             stream.write(f"  leg {leg_index}: {distance}, {duration}\n")
+        if direct_response is not None:
+            direct_route = direct_routes[index - 1] if index <= len(direct_routes) else None
+            print_detour(stream, route, direct_route)
         if route.get("optimizedIntermediateWaypointIndex"):
             stream.write(
                 "  optimized via order: "
@@ -809,6 +938,46 @@ def print_routes(stream: TextIO, response: dict[str, Any]) -> None:
             stream.write(f"  encodedPolyline: {encoded}\n")
     if response.get("geocodingResults"):
         print_geocoding_results(stream, response["geocodingResults"])
+
+
+def print_detour(
+    stream: TextIO,
+    via_route: dict[str, Any],
+    direct_route: dict[str, Any] | None,
+) -> None:
+    if direct_route is None:
+        stream.write("  detour: unavailable because the direct request returned no route\n")
+        return
+
+    via_description = via_route.get("description")
+    direct_description = direct_route.get("description")
+    if via_description != direct_description:
+        stream.write(
+            "  detour: not comparable because route descriptions differ "
+            f"(via: {via_description or '(none)'}; "
+            f"direct: {direct_description or '(none)'})\n"
+        )
+        return
+
+    via_duration = duration_seconds(via_route.get("duration"))
+    direct_duration = duration_seconds(direct_route.get("duration"))
+    if (
+        via_duration is None
+        or direct_duration is None
+        or "distanceMeters" not in via_route
+        or "distanceMeters" not in direct_route
+    ):
+        stream.write("  detour: unavailable because route totals are missing\n")
+        return
+
+    duration_delta = via_duration - direct_duration
+    distance_delta = via_route["distanceMeters"] - direct_route["distanceMeters"]
+    stream.write(
+        f"  detour: {signed_duration(duration_delta)}, "
+        f"{signed_distance(distance_delta)} "
+        f"(direct {human_distance(direct_route['distanceMeters'])}, "
+        f"{human_duration(direct_route['duration'])})\n"
+    )
 
 
 def print_geocoding_results(stream: TextIO, geocoding: dict[str, Any]) -> None:
@@ -918,6 +1087,20 @@ def human_distance(meters: int | float) -> str:
     return f"{meters} m"
 
 
+def signed_distance(meters: int | float) -> str:
+    sign = "+" if meters >= 0 else "-"
+    return sign + human_distance(abs(meters))
+
+
+def duration_seconds(raw: Any) -> float | None:
+    if not isinstance(raw, str) or not raw.endswith("s"):
+        return None
+    try:
+        return float(raw[:-1])
+    except ValueError:
+        return None
+
+
 def human_duration(raw: str) -> str:
     if not raw:
         return "unknown duration"
@@ -938,6 +1121,11 @@ def human_duration(raw: str) -> str:
     if hours:
         return f"{hours}h"
     return f"{minutes}m"
+
+
+def signed_duration(seconds: int | float) -> str:
+    sign = "+" if seconds >= 0 else "-"
+    return sign + human_duration(f"{abs(seconds)}s")
 
 
 def now_utc() -> str:
