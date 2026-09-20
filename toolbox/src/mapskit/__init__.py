@@ -243,9 +243,17 @@ def places_search(
         list[str] | None,
         typer.Argument(metavar="QUERY", help="Search query words."),
     ] = None,
-    fields: Annotated[str, typer.Option("--fields", help="Places field mask.")] = (
-        DEFAULT_PLACES_SEARCH_FIELDS
-    ),
+    fields: Annotated[
+        str,
+        typer.Option(
+            "--fields",
+            help=(
+                "Text Search field mask passed through to the API; place fields "
+                "require the places. prefix. Unrecognised fields surface as API "
+                "errors."
+            ),
+        ),
+    ] = DEFAULT_PLACES_SEARCH_FIELDS,
     language: Annotated[str, typer.Option("--language", help="BCP-47 language code.")] = "",
     region: Annotated[str, typer.Option("--region", help="Two-character region code.")] = "",
     page_token: Annotated[
@@ -286,9 +294,16 @@ def places_search(
 def places_info(
     ctx: typer.Context,
     place_id: Annotated[str, typer.Argument(help="Google place ID.")],
-    fields: Annotated[str, typer.Option("--fields", help="Place Details field mask.")] = (
-        DEFAULT_PLACE_DETAILS_FIELDS
-    ),
+    fields: Annotated[
+        str,
+        typer.Option(
+            "--fields",
+            help=(
+                "Place Details field mask passed through to the API; field names "
+                "must be unprefixed. Unrecognised fields surface as API errors."
+            ),
+        ),
+    ] = DEFAULT_PLACE_DETAILS_FIELDS,
     language: Annotated[str, typer.Option("--language", help="BCP-47 language code.")] = "",
     region: Annotated[str, typer.Option("--region", help="Two-character region code.")] = "",
 ) -> None:
