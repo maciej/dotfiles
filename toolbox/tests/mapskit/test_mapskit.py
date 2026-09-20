@@ -6,6 +6,34 @@ from pathlib import Path
 import mapskit
 
 
+class RecordingGoogleClient:
+    def __init__(self) -> None:
+        self.route_field_masks: list[str] = []
+
+    def compute_routes(self, body, field_mask: str) -> dict:
+        self.route_field_masks.append(field_mask)
+        return {"routes": []}
+
+
+def run_route(monkeypatch, tmp_path: Path, *options: str) -> RecordingGoogleClient:
+    client = RecordingGoogleClient()
+    monkeypatch.setattr(mapskit, "google_client", lambda config: client)
+    code = mapskit.run(
+        [
+            "--locations-file",
+            str(tmp_path / "locations.yaml"),
+            "route",
+            "Origin",
+            "Destination",
+            *options,
+        ],
+        io.StringIO(),
+        io.StringIO(),
+    )
+    assert code == 0
+    return client
+
+
 def test_default_api_key_file_uses_google_maps_platform_name(
     monkeypatch,
 ) -> None:
@@ -77,6 +105,36 @@ def test_clean_json_removes_empty_route_fields() -> None:
             "computeAlternativeRoutes": False,
         }
     ) == {"origin": {"address": "A"}, "destination": {"address": "B"}}
+
+
+def test_route_default_field_mask_excludes_polyline(monkeypatch, tmp_path: Path) -> None:
+    client = run_route(monkeypatch, tmp_path)
+
+    assert client.route_field_masks == [mapskit.DEFAULT_ROUTE_FIELDS]
+    assert mapskit.ROUTE_POLYLINE_FIELD not in mapskit.DEFAULT_ROUTE_FIELDS.split(",")
+
+
+def test_route_polyline_flag_adds_polyline_field(monkeypatch, tmp_path: Path) -> None:
+    client = run_route(monkeypatch, tmp_path, "--polyline")
+
+    assert client.route_field_masks == [
+        f"{mapskit.DEFAULT_ROUTE_FIELDS},{mapskit.ROUTE_POLYLINE_FIELD}"
+    ]
+
+
+def test_route_explicit_fields_are_honoured(monkeypatch, tmp_path: Path) -> None:
+    fields = "routes.duration,routes.polyline.encodedPolyline"
+    client = run_route(monkeypatch, tmp_path, "--fields", fields)
+
+    assert client.route_field_masks == [fields]
+
+
+def test_route_polyline_flag_appends_to_explicit_fields(monkeypatch, tmp_path: Path) -> None:
+    client = run_route(monkeypatch, tmp_path, "--fields", "routes.duration", "--polyline")
+
+    assert client.route_field_masks == [
+        "routes.duration,routes.polyline.encodedPolyline"
+    ]
 
 
 def test_locations_save_with_lat_lng_updates_existing_name_case_insensitively(
