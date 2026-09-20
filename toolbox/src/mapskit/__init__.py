@@ -213,7 +213,7 @@ def configure(
     ] = None,
     json_output: Annotated[
         bool,
-        typer.Option("--json", help="Print raw API JSON for places and route commands."),
+        typer.Option("--json", help="Print JSON output for supported commands."),
     ] = False,
 ) -> None:
     ctx.obj = AppConfig(
@@ -402,18 +402,42 @@ def route(
     print_routes(sys.stdout, response)
 
 
-@locations_app.command("list")
+@locations_app.command(
+    "list",
+    help=(
+        "List saved locations without geocoding. Human output appends lat, lng, "
+        "and placeId fields when known."
+    ),
+)
 @locations_app.command("ls", hidden=True)
-def locations_list(ctx: typer.Context) -> None:
+def locations_list(
+    ctx: typer.Context,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help=(
+                "Print a JSON array. Unknown coordinates and place IDs are null; "
+                "no geocoding is performed."
+            ),
+        ),
+    ] = False,
+) -> None:
     config = get_config(ctx)
     try:
         store = load_locations_file(config.locations_file)
     except MapsKitError as exc:
         fail(exc)
-    print_locations(sys.stdout, store)
+    if config.json or json_output:
+        print_json(sys.stdout, locations_json(store))
+    else:
+        print_locations(sys.stdout, store)
 
 
-@locations_app.command("get")
+@locations_app.command(
+    "get",
+    help="Show a saved location without geocoding, including known coordinates and ID.",
+)
 def locations_get(
     ctx: typer.Context,
     name: Annotated[str, typer.Argument(help="Saved location name.")],
@@ -607,11 +631,21 @@ def waypoint_from_input(raw: str, store: dict[str, Any]) -> dict[str, Any]:
 
 
 def saved_location_waypoint(location: dict[str, Any]) -> dict[str, Any]:
-    if location.get("place_id"):
-        return {"placeId": location["place_id"]}
+    place_id = saved_location_place_id(location)
+    if place_id:
+        return {"placeId": place_id}
     if location.get("lat_lng"):
         return {"location": {"latLng": location["lat_lng"]}}
     return {"address": location.get("address", "")}
+
+
+def saved_location_place_id(location: dict[str, Any]) -> str | None:
+    if location.get("place_id"):
+        return location["place_id"]
+    address = location.get("address")
+    if isinstance(address, str) and address.lower().startswith("place:"):
+        return address[len("place:") :].strip() or None
+    return None
 
 
 def parse_lat_lng(raw: str) -> dict[str, float] | None:
@@ -802,18 +836,51 @@ def print_locations(stream: TextIO, store: dict[str, Any]) -> None:
         return
     for name in names:
         location = store["locations"][name]
-        stream.write(f"{name}\t{location_summary(location)}\n")
+        fields = [name, location_summary(location)]
+        point = location.get("lat_lng")
+        if point:
+            fields.extend(
+                [
+                    f"lat={point['latitude']:.6f}",
+                    f"lng={point['longitude']:.6f}",
+                ]
+            )
+        place_id = saved_location_place_id(location)
+        if place_id:
+            fields.append(f"placeId={place_id}")
+        stream.write("\t".join(fields) + "\n")
+
+
+def locations_json(store: dict[str, Any]) -> list[dict[str, Any]]:
+    output = []
+    for name in location_names(store):
+        location = store["locations"][name]
+        point = location.get("lat_lng") or {}
+        output.append(
+            {
+                "name": name,
+                "address": location.get("address"),
+                "lat": point.get("latitude"),
+                "lng": point.get("longitude"),
+                "placeId": saved_location_place_id(location),
+                "updatedAt": location.get("updated_at"),
+            }
+        )
+    return output
 
 
 def print_saved_location(stream: TextIO, name: str, location: dict[str, Any]) -> None:
     stream.write(f"{name}\n")
     if location.get("address"):
         stream.write(f"address: {location['address']}\n")
-    if location.get("place_id"):
-        stream.write(f"placeId: {location['place_id']}\n")
+    place_id = saved_location_place_id(location)
+    if place_id:
+        stream.write(f"placeId: {place_id}\n")
     if location.get("lat_lng"):
         point = location["lat_lng"]
         stream.write(f"location: {point['latitude']:.6f},{point['longitude']:.6f}\n")
+        stream.write(f"lat: {point['latitude']:.6f}\n")
+        stream.write(f"lng: {point['longitude']:.6f}\n")
     if location.get("updated_at"):
         stream.write(f"updatedAt: {location['updated_at']}\n")
 
