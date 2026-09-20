@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import json
+import urllib.request
 from pathlib import Path
 
 import mapskit
@@ -294,6 +296,139 @@ def test_locations_save_does_not_need_api_key(tmp_path: Path) -> None:
     _, location = mapskit.lookup_location(loaded, "office")
     assert location is not None
     assert location["address"] == "1600 Amphitheatre Parkway, Mountain View, CA"
+
+
+def test_places_search_sends_circle_location_bias(monkeypatch, tmp_path: Path) -> None:
+    body = run_places_search(
+        monkeypatch,
+        tmp_path,
+        ["--near", "52.214,21.036", "--radius", "2500", "coffee"],
+    )
+
+    assert body["locationBias"] == {
+        "circle": {
+            "center": {"latitude": 52.214, "longitude": 21.036},
+            "radius": 2500.0,
+        }
+    }
+    assert "locationRestriction" not in body
+
+
+def test_places_search_sends_rectangle_location_restriction(
+    monkeypatch, tmp_path: Path
+) -> None:
+    body = run_places_search(
+        monkeypatch,
+        tmp_path,
+        ["--rect", "52.1,20.9,52.3,21.2", "coffee"],
+    )
+
+    assert body["locationRestriction"] == {
+        "rectangle": {
+            "low": {"latitude": 52.1, "longitude": 20.9},
+            "high": {"latitude": 52.3, "longitude": 21.2},
+        }
+    }
+    assert "locationBias" not in body
+
+
+def test_places_search_rejects_invalid_location_option_combinations(
+    tmp_path: Path,
+) -> None:
+    cases = [
+        (["--near", "52.2,21.0", "coffee"], "set both --near and --radius"),
+        (["--radius", "1000", "coffee"], "set both --near and --radius"),
+        (
+            [
+                "--near",
+                "52.2,21.0",
+                "--radius",
+                "1000",
+                "--rect",
+                "52.1,20.9,52.3,21.2",
+                "coffee",
+            ],
+            "set either --near/--radius or --rect, not both",
+        ),
+    ]
+
+    for args, message in cases:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        code = mapskit.run(["places", "search", *args], stdout, stderr)
+
+        assert code == 1
+        assert message in stderr.getvalue()
+
+
+def test_places_search_resolves_saved_location_for_near(
+    monkeypatch, tmp_path: Path
+) -> None:
+    locations_file = tmp_path / "locations.yaml"
+    mapskit.save_locations_file(
+        locations_file,
+        {
+            "version": 1,
+            "locations": {
+                "Town Centre": {
+                    "lat_lng": {"latitude": 52.214, "longitude": 21.036}
+                }
+            },
+        },
+    )
+
+    body = run_places_search(
+        monkeypatch,
+        tmp_path,
+        ["--near", "town centre", "--radius", "1500", "coffee"],
+        locations_file=locations_file,
+    )
+
+    assert body["locationBias"]["circle"]["center"] == {
+        "latitude": 52.214,
+        "longitude": 21.036,
+    }
+
+
+def test_places_search_help_explains_bias_and_restriction() -> None:
+    stdout = io.StringIO()
+
+    code = mapskit.run(["places", "search", "--help"], stdout, io.StringIO())
+
+    assert code == 0
+    help_text = " ".join(stdout.getvalue().split())
+    assert "Biases results; it does not restrict them." in help_text
+    assert "restriction supports rectangles only" in help_text
+
+
+def run_places_search(
+    monkeypatch,
+    tmp_path: Path,
+    args: list[str],
+    *,
+    locations_file: Path | None = None,
+) -> dict:
+    key_file = tmp_path / "google-maps-platform.key"
+    key_file.write_text("test-key\n", encoding="utf-8")
+    requests: list[urllib.request.Request] = []
+
+    def fake_urlopen(request: urllib.request.Request, timeout: int):
+        assert timeout == 30
+        requests.append(request)
+        return io.BytesIO(b'{"places": []}')
+
+    monkeypatch.setattr(mapskit.urllib.request, "urlopen", fake_urlopen)
+    command = ["--api-key-file", str(key_file)]
+    if locations_file is not None:
+        command.extend(["--locations-file", str(locations_file)])
+    command.extend(["places", "search", *args])
+
+    code = mapskit.run(command, io.StringIO(), io.StringIO())
+
+    assert code == 0
+    assert len(requests) == 1
+    assert requests[0].data is not None
+    return json.loads(requests[0].data)
 
 
 def test_route_detour_prints_difference_and_direct_baseline(

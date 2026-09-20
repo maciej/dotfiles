@@ -261,22 +261,63 @@ def places_search(
         typer.Option("--page-token", help="nextPageToken from a previous search."),
     ] = "",
     limit: Annotated[int, typer.Option("--limit", min=1, max=20)] = 5,
+    near: Annotated[
+        str,
+        typer.Option(
+            "--near",
+            help=(
+                "Circle center as <lat,lng> or a saved location name. "
+                "Biases results; it does not restrict them."
+            ),
+        ),
+    ] = "",
+    radius: Annotated[
+        float | None,
+        typer.Option(
+            "--radius",
+            help="Circle bias radius in metres; required with --near.",
+        ),
+    ] = None,
+    rect: Annotated[
+        str,
+        typer.Option(
+            "--rect",
+            help=(
+                "Hard restriction rectangle as "
+                "<sw_lat,sw_lng,ne_lat,ne_lng>; restriction supports rectangles only."
+            ),
+        ),
+    ] = "",
 ) -> None:
     config = get_config(ctx)
     query = " ".join(query_words or []).strip()
     if not query and not page_token:
         fail(MapsKitError("places search requires a query"))
+    if near and rect:
+        fail(MapsKitError("set either --near/--radius or --rect, not both"))
+    if bool(near) != (radius is not None):
+        fail(MapsKitError("set both --near and --radius"))
+    if radius is not None and radius <= 0:
+        fail(MapsKitError("--radius must be greater than zero"))
     try:
-        response = google_client(config).search_text(
-            {
-                "textQuery": query,
-                "pageSize": limit,
-                "pageToken": page_token,
-                "languageCode": language,
-                "regionCode": region,
-            },
-            fields,
-        )
+        body: dict[str, Any] = {
+            "textQuery": query,
+            "pageSize": limit,
+            "pageToken": page_token,
+            "languageCode": language,
+            "regionCode": region,
+        }
+        if near:
+            locations = load_locations_file(config.locations_file)
+            body["locationBias"] = {
+                "circle": {
+                    "center": point_from_input(near, locations),
+                    "radius": radius,
+                }
+            }
+        if rect:
+            body["locationRestriction"] = {"rectangle": parse_rectangle(rect)}
+        response = google_client(config).search_text(body, fields)
     except MapsKitError as exc:
         fail(exc)
     if config.json:
@@ -666,6 +707,35 @@ def parse_lat_lng(raw: str) -> dict[str, float] | None:
         return {"latitude": float(parts[0]), "longitude": float(parts[1])}
     except ValueError:
         return None
+
+
+def point_from_input(raw: str, store: dict[str, Any]) -> dict[str, float]:
+    _, location = lookup_location(store, raw)
+    if location is not None:
+        point = location.get("lat_lng")
+        if point is None:
+            raise MapsKitError(
+                f"saved location {raw!r} has no coordinates; save it with --lat/--lng"
+            )
+        return point
+    point = parse_lat_lng(raw)
+    if point is None:
+        raise MapsKitError("--near must be <lat,lng> or a saved location name")
+    return point
+
+
+def parse_rectangle(raw: str) -> dict[str, dict[str, float]]:
+    parts = [part.strip() for part in raw.split(",")]
+    if len(parts) != 4:
+        raise MapsKitError("--rect must be <sw_lat,sw_lng,ne_lat,ne_lng>")
+    try:
+        sw_lat, sw_lng, ne_lat, ne_lng = (float(part) for part in parts)
+    except ValueError as exc:
+        raise MapsKitError("--rect must be <sw_lat,sw_lng,ne_lat,ne_lng>") from exc
+    return {
+        "low": {"latitude": sw_lat, "longitude": sw_lng},
+        "high": {"latitude": ne_lat, "longitude": ne_lng},
+    }
 
 
 def looks_like_place_id(raw: str) -> bool:
