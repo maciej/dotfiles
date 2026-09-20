@@ -28,11 +28,12 @@ DEFAULT_PLACE_DETAILS_FIELDS = (
 )
 DEFAULT_ROUTE_FIELDS = (
     "routes.routeLabels,routes.distanceMeters,routes.duration,routes.staticDuration,"
-    "routes.description,routes.warnings,routes.polyline.encodedPolyline,"
+    "routes.description,routes.warnings,"
     "routes.legs.distanceMeters,routes.legs.duration,routes.legs.staticDuration,"
     "routes.legs.localizedValues,routes.optimizedIntermediateWaypointIndex,"
     "geocodingResults"
 )
+ROUTE_POLYLINE_FIELD = "routes.polyline.encodedPolyline"
 
 PLACES_SEARCH_ENDPOINT = "https://places.googleapis.com/v1/places:searchText"
 PLACE_DETAILS_ENDPOINT = "https://places.googleapis.com/v1/places/"
@@ -345,6 +346,13 @@ def route(
     fields: Annotated[str, typer.Option("--fields", help="Routes API field mask.")] = (
         DEFAULT_ROUTE_FIELDS
     ),
+    polyline: Annotated[
+        bool,
+        typer.Option(
+            "--polyline",
+            help="Include the encoded polyline, appending it to --fields if needed.",
+        ),
+    ] = False,
     departure: Annotated[str, typer.Option("--departure", help="RFC3339 departure time.")] = "",
     arrival: Annotated[
         str,
@@ -401,6 +409,8 @@ def route(
         }
         if any(route_modifiers.values()):
             body["routeModifiers"] = route_modifiers
+        if polyline:
+            fields = append_field_mask(fields, ROUTE_POLYLINE_FIELD)
         client = google_client(config)
         response = client.compute_routes(clean_json(body), fields)
         direct_response = None
@@ -682,6 +692,13 @@ def display_path(path: Path) -> str:
 
 def compact_field_mask(mask: str) -> str:
     return ",".join(part.strip() for part in mask.split(",") if part.strip())
+
+
+def append_field_mask(mask: str, field: str) -> str:
+    fields = compact_field_mask(mask).split(",")
+    if field not in fields:
+        fields.append(field)
+    return ",".join(fields)
 
 
 def clean_json(value: Any) -> Any:
