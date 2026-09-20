@@ -10,6 +10,7 @@ class RecordingGoogleClient:
     def __init__(self) -> None:
         self.search_fields = ""
         self.info_fields = ""
+        self.route_field_masks: list[str] = []
 
     def search_text(self, body, field_mask: str) -> dict:
         self.search_fields = field_mask
@@ -20,6 +21,64 @@ class RecordingGoogleClient:
     ) -> dict:
         self.info_fields = field_mask
         return {}
+
+    def compute_routes(self, body, field_mask: str) -> dict:
+        self.route_field_masks.append(field_mask)
+        return {"routes": []}
+
+
+def run_polyline_route(
+    monkeypatch, tmp_path: Path, *options: str
+) -> RecordingGoogleClient:
+    client = RecordingGoogleClient()
+    monkeypatch.setattr(mapskit, "google_client", lambda config: client)
+    code = mapskit.run(
+        [
+            "--locations-file",
+            str(tmp_path / "locations.yaml"),
+            "route",
+            "Origin",
+            "Destination",
+            *options,
+        ],
+        io.StringIO(),
+        io.StringIO(),
+    )
+    assert code == 0
+    return client
+
+
+class FakeRoutesClient:
+    def __init__(self, responses: list[dict]) -> None:
+        self.responses = responses
+        self.calls: list[tuple[dict, str]] = []
+
+    def compute_routes(self, body: dict, fields: str) -> dict:
+        self.calls.append((body, fields))
+        return self.responses[len(self.calls) - 1]
+
+
+def run_route(
+    monkeypatch,
+    tmp_path: Path,
+    responses: list[dict],
+    arguments: list[str],
+) -> tuple[int, str, str, FakeRoutesClient]:
+    client = FakeRoutesClient(responses)
+    monkeypatch.setattr(mapskit, "google_client", lambda config: client)
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    code = mapskit.run(
+        [
+            "--locations-file",
+            str(tmp_path / "locations.yaml"),
+            "route",
+            *arguments,
+        ],
+        stdout,
+        stderr,
+    )
+    return code, stdout.getvalue(), stderr.getvalue(), client
 
 
 def test_default_api_key_file_uses_google_maps_platform_name(
@@ -155,6 +214,38 @@ def test_clean_json_removes_empty_route_fields() -> None:
     ) == {"origin": {"address": "A"}, "destination": {"address": "B"}}
 
 
+def test_route_default_field_mask_excludes_polyline(monkeypatch, tmp_path: Path) -> None:
+    client = run_polyline_route(monkeypatch, tmp_path)
+
+    assert client.route_field_masks == [mapskit.DEFAULT_ROUTE_FIELDS]
+    assert mapskit.ROUTE_POLYLINE_FIELD not in mapskit.DEFAULT_ROUTE_FIELDS.split(",")
+
+
+def test_route_polyline_flag_adds_polyline_field(monkeypatch, tmp_path: Path) -> None:
+    client = run_polyline_route(monkeypatch, tmp_path, "--polyline")
+
+    assert client.route_field_masks == [
+        f"{mapskit.DEFAULT_ROUTE_FIELDS},{mapskit.ROUTE_POLYLINE_FIELD}"
+    ]
+
+
+def test_route_explicit_fields_are_honoured(monkeypatch, tmp_path: Path) -> None:
+    fields = "routes.duration,routes.polyline.encodedPolyline"
+    client = run_polyline_route(monkeypatch, tmp_path, "--fields", fields)
+
+    assert client.route_field_masks == [fields]
+
+
+def test_route_polyline_flag_appends_to_explicit_fields(monkeypatch, tmp_path: Path) -> None:
+    client = run_polyline_route(
+        monkeypatch, tmp_path, "--fields", "routes.duration", "--polyline"
+    )
+
+    assert client.route_field_masks == [
+        "routes.duration,routes.polyline.encodedPolyline"
+    ]
+
+
 def test_locations_save_with_lat_lng_updates_existing_name_case_insensitively(
     tmp_path: Path,
 ) -> None:
@@ -203,3 +294,140 @@ def test_locations_save_does_not_need_api_key(tmp_path: Path) -> None:
     _, location = mapskit.lookup_location(loaded, "office")
     assert location is not None
     assert location["address"] == "1600 Amphitheatre Parkway, Mountain View, CA"
+
+
+def test_route_detour_prints_difference_and_direct_baseline(
+    monkeypatch, tmp_path: Path
+) -> None:
+    responses = [
+        {
+            "routes": [
+                {
+                    "distanceMeters": 367_400,
+                    "duration": "13260s",
+                    "description": "A1",
+                }
+            ]
+        },
+        {
+            "routes": [
+                {
+                    "distanceMeters": 363_900,
+                    "duration": "12780s",
+                    "description": "A1",
+                }
+            ]
+        },
+    ]
+
+    code, stdout, stderr, client = run_route(
+        monkeypatch,
+        tmp_path,
+        responses,
+        ["--from", "A", "--to", "B", "--via", "C", "--detour"],
+    )
+
+    assert code == 0
+    assert "detour: +8m, +3.5 km (direct 363.9 km, 3h 33m)" in stdout
+    assert stderr == ""
+    assert len(client.calls) == 2
+
+
+def test_route_detour_requests_share_routing_options(monkeypatch, tmp_path: Path) -> None:
+    route = {
+        "routes": [
+            {"distanceMeters": 10_000, "duration": "600s", "description": "A1"}
+        ]
+    }
+    code, _, stderr, client = run_route(
+        monkeypatch,
+        tmp_path,
+        [route, route],
+        [
+            "--from",
+            "A",
+            "--to",
+            "B",
+            "--via",
+            "C",
+            "--detour",
+            "--departure",
+            "2026-09-21T08:00:00Z",
+            "--routing-preference",
+            "TRAFFIC_AWARE_OPTIMAL",
+            "--mode",
+            "DRIVE",
+            "--avoid-tolls",
+            "--avoid-highways",
+            "--avoid-ferries",
+            "--units",
+            "IMPERIAL",
+        ],
+    )
+
+    assert code == 0
+    assert stderr == ""
+    via_request, direct_request = (call[0] for call in client.calls)
+    shared_fields = (
+        "departureTime",
+        "routingPreference",
+        "travelMode",
+        "routeModifiers",
+        "units",
+    )
+    for field in shared_fields:
+        assert via_request[field] == direct_request[field]
+    assert via_request["intermediates"] == [{"address": "C"}]
+    assert "intermediates" not in direct_request
+
+
+def test_route_detour_suppresses_difference_for_different_descriptions(
+    monkeypatch, tmp_path: Path
+) -> None:
+    responses = [
+        {
+            "routes": [
+                {"distanceMeters": 12_000, "duration": "900s", "description": "A1"}
+            ]
+        },
+        {
+            "routes": [
+                {"distanceMeters": 10_000, "duration": "600s", "description": "A2"}
+            ]
+        },
+    ]
+
+    code, stdout, stderr, _ = run_route(
+        monkeypatch,
+        tmp_path,
+        responses,
+        ["--from", "A", "--to", "B", "--via", "C", "--detour"],
+    )
+
+    assert code == 0
+    assert (
+        "detour: not comparable because route descriptions differ "
+        "(via: A1; direct: A2)" in stdout
+    )
+    assert "+5m" not in stdout
+    assert stderr == ""
+
+
+def test_route_via_default_behavior_is_unchanged(monkeypatch, tmp_path: Path) -> None:
+    response = {
+        "routes": [
+            {"distanceMeters": 12_000, "duration": "1200s", "description": "A1"}
+        ]
+    }
+
+    code, stdout, stderr, client = run_route(
+        monkeypatch,
+        tmp_path,
+        [response],
+        ["--from", "A", "--to", "B", "--via", "C"],
+    )
+
+    assert code == 0
+    assert stdout == "Route 1: 12.0 km, 20m\n  description: A1\n"
+    assert stderr == ""
+    assert len(client.calls) == 1
