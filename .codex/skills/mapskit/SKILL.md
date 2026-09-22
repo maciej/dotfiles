@@ -35,6 +35,8 @@ Prefer saved names for personal locations, and do not expose private addresses i
 
 ## Common Tasks
 
+### Location Scoping
+
 Search places:
 
 ```bash
@@ -53,6 +55,8 @@ the circle. Use `--rect <sw_lat,sw_lng,ne_lat,ne_lng>` to set a hard rectangular
 `--radius` cannot be used alone. A saved name passed to `--near` must contain
 coordinates saved with `--lat` and `--lng`; an address-only entry fails with
 guidance to add them.
+
+### Place Details and Routes
 
 Fetch details:
 
@@ -73,13 +77,13 @@ Routes omit the encoded polyline by default to keep output small. Add
 `routes.polyline.encodedPolyline` to the default field mask or to an explicit
 `--fields` value.
 
-Manage saved locations:
+### Manage Saved Locations
 
 ```bash
 mapskit locations list
 mapskit locations list --json
 mapskit locations save Work "350 Fifth Avenue, New York, NY" --lat 40.7484 --lng -73.9857
-mapskit locations save Venue --place-id ChIJ...
+mapskit locations save Venue --place-id ChIJ... --lat 40.7484 --lng -73.9857
 mapskit locations get Home
 mapskit locations rm Work
 ```
@@ -89,6 +93,17 @@ mapskit locations rm Work
 array whose `lat`, `lng`, and `placeId` values are `null` when unknown.
 `locations get` prints known coordinates and resolves `placeId` from either a
 `--place-id` save or an address stored as `place:<id>`.
+
+For the illustrative `Venue` entry above (`ChIJ...` is a placeholder), human
+list output includes:
+
+```text
+Venue	place:ChIJ...	lat=40.748400	lng=-73.985700	placeId=ChIJ...
+```
+
+The corresponding JSON array entry contains `"lat": 40.7484`,
+`"lng": -73.9857`, and `"placeId": "ChIJ..."`; an address-only entry has
+`null` for all three fields.
 
 Location reads never geocode. An address-only entry keeps unknown coordinates,
 so do not assume every saved location can be used with `places search --near`.
@@ -122,12 +137,27 @@ Field-mask syntax is endpoint-specific:
 - The wrong prefix produces an HTTP 400 `INVALID_ARGUMENT`. Unrecognized field
   names also surface as API errors; neither case silently falls back to defaults.
 
+```bash
+mapskit places search --fields places.id,places.displayName "coffee near Central Park"
+mapskit places info --fields id,displayName ChIJ...
+```
+
+Replace `ChIJ...` with an actual place ID returned by search.
+
 ## Known Limitations
 
 `route --detour` requests both the route with `--via` and a direct route, but
 its comparability guard checks the Routes API `description`. That description
 typically changes when an intermediate is present, so real routes often report
 that the two results are not comparable instead of printing the detour cost.
+
+`--detour` requires at least one `--via` waypoint:
+
+```bash
+mapskit route --detour --via Stop Home Destination
+```
+
+Here `Home`, `Stop`, and `Destination` stand for saved names or valid route inputs.
 
 For a reliable comparison, run the direct and via routes separately and compare
 their total distance and duration. The `--via` result also prints `leg 1`, `leg
