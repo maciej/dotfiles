@@ -32,8 +32,10 @@
     "enabled_in_text_threads": false
   },
   "agent": {
+    "threads_sidebar": {
+      "position": "right"
+    },
     "dock": "right",
-    "sidebar_side": "right",
     "inline_assistant_model": {
       "provider": "openrouter",
       "model": "nvidia/nemotron-3-super-120b-a12b:free",
