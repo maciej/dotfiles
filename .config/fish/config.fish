@@ -72,6 +72,10 @@ set -x LANG en_US.UTF-8
 set -x LC_TIME pl_PL.UTF-8
 
 if test (uname -s) = Darwin
+    if test -x /Applications/BambuStudio.app/Contents/MacOS/BambuStudio
+        alias bambu-studio='/Applications/BambuStudio.app/Contents/MacOS/BambuStudio'
+    end
+
     set -l intellij_bin "/Applications/IntelliJ IDEA.app/Contents/MacOS"
     if test -d "$intellij_bin"
         fish_add_path "$intellij_bin"

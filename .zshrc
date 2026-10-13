@@ -262,6 +262,10 @@ if [[ -n "${BREW_PREFIX}" && -f "$BREW_PREFIX/share/zsh-syntax-highlighting/zsh-
   source "$BREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 fi
 
+if [[ -x /Applications/BambuStudio.app/Contents/MacOS/BambuStudio ]]; then
+  alias bambu-studio='/Applications/BambuStudio.app/Contents/MacOS/BambuStudio'
+fi
+
 JETBRAINS_APP_PATH="/Applications/IntelliJ IDEA.app/Contents/MacOS"
 if [[ -d "$JETBRAINS_APP_PATH" ]]; then
   path=(${path:#$JETBRAINS_APP_PATH} "$JETBRAINS_APP_PATH")
