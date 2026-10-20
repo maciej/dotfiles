@@ -1,0 +1,6 @@
+interface:
+  display_name: "Himalaya"
+  short_description: "Operate email with the Himalaya CLI on request"
+  default_prompt: "Use $himalaya to work with my email through the Himalaya CLI."
+policy:
+  allow_implicit_invocation: false
