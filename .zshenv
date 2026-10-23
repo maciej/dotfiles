@@ -1,3 +1,7 @@
+# Let ~/.zshrc initialize completions after configuring fpath.
+# Ubuntu otherwise initializes them first with a different completion set.
+skip_global_compinit=1
+
 # Keep preferred user/Homebrew bins ahead of macOS system paths.
 typeset -gU path PATH
 
