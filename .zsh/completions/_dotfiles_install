@@ -1,0 +1,16 @@
+#compdef install.sh
+
+# Scope these options to the dotfiles installer, including relative paths.
+local installer=${words[1]:A}
+if [[ ! -f "${installer:h}/src/dotfiles_install/__main__.py" ]]; then
+  _files
+  return
+fi
+
+_arguments \
+  '--local[Link dotfiles and install user-local tools only]' \
+  '--no-local[Run a full install and clear the local default]' \
+  '*--with=[Include an optional tool group]:tool group:(k8s)' \
+  '--upgrade[Upgrade managed Helix and Codex CLI installations]' \
+  '--sync-zed-settings[Regenerate Zed settings after linking dotfiles]' \
+  '--help[Show help and exit]'
