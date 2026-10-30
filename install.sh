@@ -18,7 +18,7 @@ log_err() {
 
 print_help() {
   cat <<EOF
-Usage: install.sh [--local] [--no-local] [--with GROUP[,GROUP...]] [--upgrade] [--sync-zed-settings] [--help]
+Usage: install.sh [--local | --system] [--show-mode] [--with GROUP[,GROUP...]] [--upgrade] [--sync-zed-settings] [--help]
 
 Install dotfiles packages and link configuration files.
 
@@ -28,8 +28,11 @@ Options:
                        into user-local locations and does not install packages
                        or modify system state. Also remember this as the
                        default for future installs on this host.
-  --no-local           Run a full install even when the local-install default
-                       marker exists, and remove that marker.
+  --system             Run a full system install even when the local-install
+                       default marker exists, and remove that marker.
+  --no-local           Alias for --system.
+  --show-mode          Print the effective mode (local or system) and exit
+                       without installing or changing the saved default.
   --with GROUP         Include optional tool group(s). May be repeated or use
                        comma-separated values. Available groups:
                        k8s (kubectl, kubie). Not valid with --local.
@@ -189,11 +192,31 @@ bootstrap_repo_if_needed() {
 
 main() {
   local uv_bin
+  local arg
 
   if args_include_help "$@"; then
     print_help
     return 0
   fi
+
+  for arg in "$@"; do
+    if [[ "${arg}" == "--show-mode" ]]; then
+      case "${SCRIPT_SOURCE}" in
+        ""|/dev/stdin|/dev/fd/*|stdin|-) ;;
+        *) DOTFILES_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)" ;;
+      esac
+      if [[ ! -f "${DOTFILES_DIR}/src/dotfiles_install/__main__.py" ]]; then
+        log_err "--show-mode requires an existing dotfiles checkout."
+        return 1
+      fi
+      if ! command -v python3 >/dev/null 2>&1; then
+        log_err "--show-mode requires python3; no tools will be installed."
+        return 1
+      fi
+      export DOTFILES_DIR
+      exec python3 -B "${DOTFILES_DIR}/src/dotfiles_install/__main__.py" "$@"
+    fi
+  done
 
   bootstrap_repo_if_needed "$@"
   ensure_uv_bootstrap "$@"

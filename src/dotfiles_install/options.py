@@ -14,6 +14,7 @@ from .errors import InstallerError, InstallerUsageError
 class Options:
     local_install: bool = False
     local_install_choice: str = "auto"
+    show_mode: bool = False
     upgrade: bool = False
     sync_zed_settings: bool = False
     with_groups: list[str] = field(default_factory=list)
@@ -48,9 +49,11 @@ def parse_args(argv: Sequence[str]) -> Options:
         if arg == "--local":
             options.local_install = True
             options.local_install_choice = "local"
-        elif arg == "--no-local":
+        elif arg in {"--system", "--no-local"}:
             options.local_install = False
             options.local_install_choice = "system"
+        elif arg == "--show-mode":
+            options.show_mode = True
         elif arg == "--with":
             index += 1
             if index >= len(argv):
@@ -118,10 +121,12 @@ def apply_local_install_default(options: Options) -> None:
         options.local_install = False
     elif marker.is_file():
         if options.with_groups:
-            log(f"Ignoring local install default for this optional tool group install: {marker}")
+            if not options.show_mode:
+                log(f"Ignoring local install default for this optional tool group install: {marker}")
         else:
             options.local_install = True
-            log(f"Defaulting to --local because {marker} exists")
+            if not options.show_mode:
+                log(f"Defaulting to --local because {marker} exists")
 
 
 def update_local_install_default_marker(options: Options) -> None:

@@ -102,6 +102,11 @@ def run_cli(argv: Sequence[str]) -> int:
         state.CURRENT_OPTIONS = options
         validate_install_mode_options(options)
         apply_local_install_default(options)
+        mode = "local" if options.local_install else "system"
+        if options.show_mode:
+            print(mode)
+            return 0
+        log(f"Install mode: {mode}")
         update_local_install_default_marker(options)
         main_install(options)
         return 0

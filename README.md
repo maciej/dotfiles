@@ -25,8 +25,14 @@ curl -fsSL https://raw.githubusercontent.com/maciej/dotfiles/main/install.sh | b
 ```
 
 Passing `--local` writes `${XDG_CONFIG_HOME:-~/.config}/dotfiles/install-mode`,
-so future installs on that host default to local mode. Pass `--no-local` to run
-a full install again and remove that marker.
+so future installs on that host default to local mode. Pass `--system` to run
+a full system install again and remove that marker (`--no-local` remains an alias).
+
+Run `./install.sh --show-mode` to print `local` or `system` and exit without
+installing anything or changing the saved default. This query uses an existing
+`python3` and checkout, without bootstrapping uv. It also accepts mode overrides
+(for example, `./install.sh --system --show-mode`) and optional groups to report
+the mode that invocation would use. Normal installs log their effective mode.
 
 ## Some software choices
 

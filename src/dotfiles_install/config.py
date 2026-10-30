@@ -99,7 +99,7 @@ KUBECTL_TEMP_MIN_FREE_BYTES = 128 * MIB
 KUBIE_TEMP_MIN_FREE_BYTES = 32 * MIB
 
 HELP_TEXT = """\
-Usage: install.sh [--local] [--no-local] [--with GROUP[,GROUP...]] [--upgrade] [--sync-zed-settings] [--help]
+Usage: install.sh [--local | --system] [--show-mode] [--with GROUP[,GROUP...]] [--upgrade] [--sync-zed-settings] [--help]
 
 Install dotfiles packages and link configuration files.
 
@@ -109,8 +109,11 @@ Options:
                        into user-local locations and does not install packages
                        or modify system state. Also remember this as the
                        default for future installs on this host.
-  --no-local           Run a full install even when the local-install default
-                       marker exists, and remove that marker.
+  --system             Run a full system install even when the local-install
+                       default marker exists, and remove that marker.
+  --no-local           Alias for --system.
+  --show-mode          Print the effective mode (local or system) and exit
+                       without installing or changing the saved default.
   --with GROUP         Include optional tool group(s). May be repeated or use
                        comma-separated values. Available groups:
                        k8s (kubectl, kubie). Not valid with --local.

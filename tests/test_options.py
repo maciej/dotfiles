@@ -49,11 +49,12 @@ def test_explicit_local_writes_marker() -> None:
     assert_file_equals(installer.local_install_marker_path(), "local")
 
 
-def test_no_local_clears_marker() -> None:
+@pytest.mark.parametrize("flag", ["--system", "--no-local"])
+def test_system_clears_marker(flag: str) -> None:
     marker = installer.local_install_marker_path()
     marker.parent.mkdir(parents=True)
     marker.write_text("local\n")
-    options = installer.parse_args(["--no-local"])
+    options = installer.parse_args([flag])
 
     installer.apply_local_install_default(options)
     installer.update_local_install_default_marker(options)
