@@ -1,0 +1,13 @@
+#!/bin/sh
+# Expose the official macOS app executable for headless slicing.
+set -eu
+
+for app in /Applications/BambuStudio.app "$HOME/Applications/BambuStudio.app"; do
+    binary="$app/Contents/MacOS/BambuStudio"
+    if [ -x "$binary" ]; then
+        exec "$binary" "$@"
+    fi
+done
+
+printf '%s\n' 'bambu-studio: Bambu Studio is missing; install it with brew install --cask bambu-studio' >&2
+exit 127

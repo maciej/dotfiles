@@ -48,6 +48,12 @@ Obsidian-related skills (`obsidian-cli`, `obsidian-bases`, `obsidian-markdown`,
 `.agents/skills/`, so Stow links them into `~/.agents/skills` for
 agent-agnostic use.
 
+### Bambu printing tools (macOS)
+
+The full Homebrew install includes the official `bambu-studio` cask. The stowed
+`~/.local/bin/bambu-studio` launcher runs the Bambu Studio app executable, so
+`bambu-studio --help` works from the shell.
+
 ### Editor
 
 - Local sessions use **Zed** (`zed --wait`) as the default editor.

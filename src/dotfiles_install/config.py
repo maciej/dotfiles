@@ -56,6 +56,7 @@ APT_OPTIONAL_PACKAGES = [
 ]
 
 BREW_CASKS = [
+    "bambu-studio",
     "brave-browser",
     "claude-code",
     "codex",
