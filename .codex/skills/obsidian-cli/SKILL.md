@@ -7,6 +7,14 @@ description: Interact with a running Obsidian app using its CLI to read, create,
 
 Use `obsidian help` as the current command reference. Obsidian must be running.
 
+## CLI Discovery Failures in a Sandbox
+
+If the CLI reports “The CLI is unable to find Obsidian. Please make sure Obsidian is running and try again.”, treat this as a discovery/connection failure, not proof that the app is closed. Sandbox restrictions can produce this error even while Obsidian is running.
+
+Retry the read-only `obsidian help` command outside the sandbox using the execution tool's approval mechanism (`sandbox_permissions="require_escalated"` where supported). If it succeeds, use approved execution outside the sandbox for subsequent CLI commands and verify the intended vault with `obsidian vault="<name>" vault info=path`. Do not replay a potentially mutating command merely to diagnose connectivity.
+
+If the retry is denied or unavailable, report the access limitation without claiming Obsidian is not running. If it also fails outside the sandbox, investigate the installed CLI, running app, and CLI configuration before recommending a restart or reinstall. Do not modify vault content during connection diagnostics.
+
 ## Syntax and Targeting
 
 - Pass valued parameters as `key=value`; quote values containing spaces.
