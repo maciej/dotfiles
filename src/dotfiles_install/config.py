@@ -79,6 +79,7 @@ LEGACY_STOW_PATHS = [
     ".agents/skills/browser-use-cli",
     ".agents/skills/mapskit",
     ".agents/skills/python-plots-styling",
+    ".agents/skills/skill-refine",
     ".codex/skills/playwright",
     ".config/opencode/commands/fix-mr.md",
     ".config/opencode/skills/gitlab",
