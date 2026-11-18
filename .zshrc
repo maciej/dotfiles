@@ -344,6 +344,13 @@ if (( $+commands[summarize] )); then
   }
 fi
 
+# Codex needs terminal forwarding when a macOS Rex host has a native clipboard.
+if [[ $OSTYPE == darwin* && -n ${REX_SESSION:-} && -n ${REX_BLOCK:-} ]]; then
+  codex() {
+    HERDR_ENV=1 command codex "$@"
+  }
+fi
+
 # Local, machine-specific overrides.
 if [[ -o interactive ]]; then
   alias cy='codex --yolo'
