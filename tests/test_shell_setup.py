@@ -78,3 +78,47 @@ def test_preserves_non_repo_entries_in_legacy_directory(temp_home: Path, monkeyp
     assert outside_link.is_symlink()
     assert not repo_link.exists()
     assert legacy_dir.is_dir()
+
+
+def test_precreates_missing_stow_directory(temp_home: Path, monkeypatch) -> None:
+    physical_home = temp_home.resolve()
+    monkeypatch.setattr(shell_setup, "PRECREATED_STOW_DIRECTORIES", [".config/opencode"])
+
+    shell_setup.ensure_precreated_stow_directories()
+
+    directory = physical_home / ".config/opencode"
+    assert directory.is_dir()
+    assert not directory.is_symlink()
+
+
+def test_precreate_keeps_existing_directory_contents(temp_home: Path, monkeypatch) -> None:
+    physical_home = temp_home.resolve()
+    monkeypatch.setattr(shell_setup, "PRECREATED_STOW_DIRECTORIES", [".config/opencode"])
+    local_file = physical_home / ".config/opencode/service.json"
+    local_file.parent.mkdir(parents=True)
+    local_file.write_text("{}")
+
+    shell_setup.ensure_precreated_stow_directories()
+
+    assert local_file.read_text() == "{}"
+
+
+def test_warns_loudly_when_precreated_directory_is_symlink(
+    temp_home: Path, monkeypatch, capsys
+) -> None:
+    physical_home = temp_home.resolve()
+    monkeypatch.setattr(shell_setup, "PRECREATED_STOW_DIRECTORIES", [".config/opencode"])
+    repo_dir = physical_home / ".dotfiles/.config/opencode"
+    repo_dir.mkdir(parents=True)
+    link = physical_home / ".config/opencode"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../.dotfiles/.config/opencode")
+
+    shell_setup.ensure_precreated_stow_directories()
+
+    assert link.is_symlink()
+    assert os.readlink(link) == "../.dotfiles/.config/opencode"
+    err = capsys.readouterr().err
+    assert "WARNING" in err
+    assert str(link) in err
+    assert "../.dotfiles/.config/opencode" in err

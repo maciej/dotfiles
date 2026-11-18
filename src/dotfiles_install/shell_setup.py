@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import state
 from .config import LEGACY_STOW_PATHS, PRECREATED_STOW_DIRECTORIES
-from .core import command_exists, home_dir, log, path_is_inside, run
+from .core import command_exists, home_dir, log, log_err, path_is_inside, run
 from .errors import InstallerError
 from .options import Options
 
@@ -93,10 +93,26 @@ def resolve_symlink_target_lexically(link_path: Path, link_target: str) -> Path:
     return Path(os.path.normpath(os.fspath(target_path)))
 
 
+def warn_precreated_stow_directory_is_symlink(directory: Path) -> None:
+    banner = "!" * 72
+    log_err(banner)
+    log_err(f"WARNING: {directory} is a symlink, not a real directory.")
+    log_err(f"  It points to: {os.readlink(directory)}")
+    log_err("  This directory must be a real directory so stow links files into it")
+    log_err("  individually. As a symlink into the dotfiles repo, any file the app")
+    log_err("  writes here (including secrets) lands in the git working tree.")
+    log_err("  Leaving it untouched. To fix it manually:")
+    log_err("    1. Move any untracked files out of the repo copy of this directory.")
+    log_err(f"    2. rm {directory}  (removes only the symlink)")
+    log_err(f"    3. mkdir {directory} and put the untracked files back in it.")
+    log_err("    4. Re-run the installer (or stow -v --no-folding . from the repo).")
+    log_err(banner)
+
+
 def ensure_precreated_stow_directories() -> None:
     for directory in home_relative_paths(PRECREATED_STOW_DIRECTORIES):
         if directory.is_symlink():
-            log(f"Precreated stow directory is currently a symlink; leaving it in place: {directory}")
+            warn_precreated_stow_directory_is_symlink(directory)
             continue
         directory.mkdir(parents=True, exist_ok=True)
         log(f"Ensured directory exists before stow: {directory}")

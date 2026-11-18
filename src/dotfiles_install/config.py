@@ -87,8 +87,13 @@ LEGACY_STOW_PATHS = [
     ".shell_paths",
 ]
 
+# Directories that must exist as real directories before stow runs, so stow
+# links their contents file-by-file instead of folding the whole directory into
+# a symlink into this repo (which would leak app-written runtime files, such as
+# secrets, into the working tree).
 PRECREATED_STOW_DIRECTORIES = [
     ".codex/skills",
+    ".config/opencode",
 ]
 
 KNOWN_WITH_GROUPS = {"k8s"}
