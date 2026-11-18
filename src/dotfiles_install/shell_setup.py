@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import state
 from .config import LEGACY_STOW_PATHS, PRECREATED_STOW_DIRECTORIES
-from .core import command_exists, home_dir, log, log_err, path_is_inside, run
+from .core import command_exists, home_dir, log, log_err, path_is_inside, run, uname
 from .errors import InstallerError
 from .options import Options
 
@@ -207,6 +207,43 @@ def link_dotfiles() -> None:
         )
 
 
+def sync_scheduled_codex_prompt_skill() -> None:
+    skill_path = Path(".codex/skills/scheduled-codex-prompts")
+    source = state.DOTFILES_DIR / skill_path
+    target = home_dir() / skill_path
+    target_parent = target.parent.resolve()
+    linux = uname("-s") == "Linux"
+
+    if target_parent == source.parent:
+        log_err(f"Unfold the Codex directory symlink before managing this skill: {target.parent}")
+        return
+
+    if (
+        target.is_symlink()
+        and resolve_symlink_target_lexically(target, os.readlink(target)) == source
+    ):
+        if not linux:
+            target.unlink()
+            log(f"Removed Linux-only Codex skill link: {target}")
+        return
+
+    entrypoint = target / "SKILL.md"
+    if (
+        not target.is_symlink()
+        and entrypoint.is_symlink()
+        and resolve_symlink_target_lexically(entrypoint, os.readlink(entrypoint))
+        == source / "SKILL.md"
+    ):
+        remove_legacy_stow_directory(target)
+
+    if linux:
+        if target.exists() or target.is_symlink():
+            log_err(f"Existing Codex skill path left in place: {target}")
+            return
+        target.symlink_to(os.path.relpath(source, target_parent), target_is_directory=True)
+        log(f"Linked Linux-only Codex skill: {target}")
+
+
 def sync_zed_settings() -> None:
     script_path = state.DOTFILES_DIR / "scripts/zed-settings"
     if not script_path.is_file():
@@ -242,6 +279,7 @@ def finish_stow_and_shell_setup(options: Options) -> None:
     ensure_precreated_stow_directories()
     ensure_ssh_config_fragment_directory()
     link_dotfiles()
+    sync_scheduled_codex_prompt_skill()
     ensure_ssh_config_include()
     rebuild_bat_cache()
     if options.sync_zed_settings:

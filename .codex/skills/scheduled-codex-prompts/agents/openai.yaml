@@ -1,0 +1,3 @@
+interface:
+  display_name: "Codex Follow-up Scheduler"
+  short_description: "Schedule one-time follow-ups in Codex threads"

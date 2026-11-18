@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 from dotfiles_install import shell_setup, state
 
 
@@ -122,3 +124,44 @@ def test_warns_loudly_when_precreated_directory_is_symlink(
     assert "WARNING" in err
     assert str(link) in err
     assert "../.dotfiles/.config/opencode" in err
+
+
+@pytest.mark.parametrize("os_name", ["Linux", "Darwin"])
+@pytest.mark.parametrize("previous_link", [None, "directory", "file"])
+def test_sync_scheduled_codex_skill(temp_home, monkeypatch, os_name, previous_link):
+    monkeypatch.setattr(shell_setup, "uname", lambda _: os_name)
+    skill_path = Path(".codex/skills/scheduled-codex-prompts")
+    source = state.DOTFILES_DIR / skill_path
+    target = temp_home / skill_path
+    target.parent.mkdir(parents=True)
+    if previous_link == "directory":
+        target.symlink_to(os.path.relpath(source, target.parent))
+    elif previous_link == "file":
+        target.mkdir()
+        (target / "SKILL.md").symlink_to(source / "SKILL.md")
+
+    shell_setup.sync_scheduled_codex_prompt_skill()
+    shell_setup.sync_scheduled_codex_prompt_skill()
+
+    if os_name == "Linux":
+        assert target.is_symlink()
+        assert target.resolve() == source
+    else:
+        assert not target.exists()
+        assert not target.is_symlink()
+
+
+def test_sync_scheduled_codex_skill_keeps_user_files(temp_home, monkeypatch):
+    monkeypatch.setattr(shell_setup, "uname", lambda _: "Darwin")
+    skill_path = Path(".codex/skills/scheduled-codex-prompts")
+    source = state.DOTFILES_DIR / skill_path
+    target = temp_home / skill_path
+    target.mkdir(parents=True)
+    (target / "SKILL.md").symlink_to(source / "SKILL.md")
+    notes = target / "notes.txt"
+    notes.write_text("local")
+
+    shell_setup.sync_scheduled_codex_prompt_skill()
+
+    assert not (target / "SKILL.md").is_symlink()
+    assert notes.read_text() == "local"

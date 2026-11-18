@@ -6,6 +6,7 @@
 ^/\.git$
 ^/\.idea$
 ^/AGENTS\.md$
+^/\.codex/skills/scheduled-codex-prompts$
 ^/\.config/zed/settings\.json$
 ^/\.config/opencode/node_modules$
 ^/\.config/opencode/package\.json$

@@ -40,9 +40,12 @@ The local install currently installs `bat`, `delta`, and Helix from upstream
 release archives into `~/.local/bin`, copies the Helix runtime into
 `~/.config/helix/runtime`, installs the Codex CLI standalone package under
 `~/.codex/packages/standalone` with a `~/.local/bin/codex` launcher, and links
-dotfiles with Stow. Skills are tracked directly under `.codex/skills/`,
-so Stow links them into `~/.codex/skills` with the rest of the dotfiles. The
-Obsidian-related skills (`obsidian-cli`, `obsidian-bases`, `obsidian-markdown`,
+dotfiles with Stow. Most skills under `.codex/skills/` are linked by Stow
+into `~/.codex/skills`. The installer links `scheduled-codex-prompts` only on
+Linux. The skill requires a systemd user manager to schedule prompts. Use
+`stow --no-folding .` for manual Stow runs so the parent directories stay real.
+
+The Obsidian-related skills (`obsidian-cli`, `obsidian-bases`, `obsidian-markdown`,
 `json-canvas`) and the GitHub workflow skills (`github`, `gh-address-comments`,
 `gh-fix-ci`, `gh-yeet`) are also exposed through symlinks under
 `.agents/skills/`, so Stow links them into `~/.agents/skills` for
