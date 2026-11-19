@@ -19,8 +19,8 @@ def test_creates_private_codex_config(temp_home):
         "tui": {
             "keymap": {
                 "chat": {
-                    "decrease_reasoning_effort": "f6",
-                    "increase_reasoning_effort": "f7",
+                    "decrease_reasoning_effort": ["f6", "shift-down"],
+                    "increase_reasoning_effort": ["f7", "shift-up"],
                 }
             }
         }
@@ -34,7 +34,7 @@ def test_updates_only_owned_bindings_and_skips_a_second_write(temp_home):
         '# Host-specific settings\nmodel_reasoning_effort   = "medium"\n'
         '\n[tui.keymap.chat]\n'
         'decrease_reasoning_effort = ["alt-comma"] # lower\n'
-        'increase_reasoning_effort = "alt-period"\n'
+        'increase_reasoning_effort = "f7"\n'
         'toggle_voice = "f8"\n'
         '\n[tui.keymap.global]\nleader = "ctrl-x"\n'
     )
@@ -43,7 +43,9 @@ def test_updates_only_owned_bindings_and_skips_a_second_write(temp_home):
 
     sync_codex_keybindings()
 
-    expected = original.replace('["alt-comma"]', '"f6"').replace('"alt-period"', '"f7"')
+    expected = original.replace('["alt-comma"]', '["f6", "shift-down"]').replace(
+        '"f7"', '["f7", "shift-up"]'
+    )
     assert path.read_text() == expected
     before = path.stat()
     assert stat.S_IMODE(before.st_mode) == 0o640

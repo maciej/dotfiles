@@ -10,8 +10,8 @@ from .core import home_dir, log
 from .errors import InstallerError
 
 CODEX_REASONING_KEYBINDINGS = {
-    "decrease_reasoning_effort": "f6",
-    "increase_reasoning_effort": "f7",
+    "decrease_reasoning_effort": ["f6", "shift-down"],
+    "increase_reasoning_effort": ["f7", "shift-up"],
 }
 
 
