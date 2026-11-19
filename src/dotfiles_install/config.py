@@ -8,6 +8,7 @@ BREW_PACKAGES = [
     "helix",
     "git",
     "git-delta",
+    "worktrunk",
     "fzf",
     "ripgrep",
     "rsync",
@@ -109,6 +110,12 @@ GIT_DELTA_TEMP_MIN_FREE_BYTES = 64 * MIB
 BAT_TEMP_MIN_FREE_BYTES = 64 * MIB
 KUBECTL_TEMP_MIN_FREE_BYTES = 128 * MIB
 KUBIE_TEMP_MIN_FREE_BYTES = 32 * MIB
+WORKTRUNK_VERSION = "0.82.0"
+WORKTRUNK_LINUX_SHA256 = {
+    "aarch64": "b907f891bc051dcfc13fa479194e156b356f434a37103522ea1fe1b7ded899b5",
+    "x86_64": "d1e38cf36d8c14ef0682a6d6617f8a512b1a971feb3dfa437419d00136e19a3e",
+}
+WORKTRUNK_TEMP_MIN_FREE_BYTES = 32 * MIB
 
 HELP_TEXT = """\
 Usage: install.sh [--local | --system] [--show-mode] [--with GROUP[,GROUP...]] [--upgrade] [--sync-zed-settings] [--help]
@@ -117,9 +124,9 @@ Install dotfiles packages and link configuration files.
 
 Options:
   --local              Link dotfiles and install user-local tools only. This
-                       currently installs bat, git-delta, Helix, and Codex CLI
-                       into user-local locations and does not install packages
-                       or modify system state. Also remember this as the
+                       installs bat, git-delta, Helix, Codex CLI, and on Linux,
+                       Worktrunk into user-local locations. It does not install
+                       system packages. Also remember this as the
                        default for future installs on this host.
   --system             Run a full system install even when the local-install
                        default marker exists, and remove that marker.
@@ -129,9 +136,9 @@ Options:
   --with GROUP         Include optional tool group(s). May be repeated or use
                        comma-separated values. Available groups:
                        k8s (kubectl, kubie). Not valid with --local.
-  --upgrade            On Linux, upgrade Helix and Codex CLI when they are
-                       managed by the non-apt installer path. Does not run apt
-                       upgrade or brew upgrade.
+  --upgrade            On Linux, upgrade eligible user-local tools and reinstall
+                       dotfiles-managed Worktrunk at its pinned version. Does
+                       not run apt upgrade or brew upgrade.
   --sync-zed-settings  Regenerate ~/.config/zed/settings.json from the tracked
                        shared settings after linking dotfiles.
   --help               Show this help message and exit.

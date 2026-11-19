@@ -33,6 +33,30 @@ fish_add_path /opt/homebrew/sbin
 fish_add_path /opt/homebrew/bin
 fish_add_path "$HOME/.opencode/bin"
 fish_add_path "$HOME/.local/bin"
+fish_add_path --path --append "$HOME/.cargo/bin"
+
+if status is-interactive; and command -q wt
+    command wt config shell init fish | source
+    COMPLETE=fish command wt | source
+
+    # Usage: wt-codex [suffix] [-- codex arguments]
+    function wt-codex
+        set -l suffix
+        if set -q argv[1]; and test "$argv[1]" != --
+            set suffix "$argv[1]"
+            set -e argv[1]
+        else
+            set suffix (openssl rand -hex 6); or return
+        end
+        if set -q argv[1]; and test "$argv[1]" = --
+            set -e argv[1]
+        end
+
+        git check-ref-format --branch "$suffix" >/dev/null; or return
+        wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
+            switch --create --base=@ --cd -x codex "$suffix" -- $argv
+    end
+end
 
 if command -q zoxide
     zoxide init fish | source

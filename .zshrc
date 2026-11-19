@@ -106,6 +106,27 @@ fi
 autoload -Uz compinit
 compinit -d "$HOME/.zcompdump"
 
+# Worktrunk shell integration and completions.
+if (( $+commands[wt] )); then
+  eval "$(command wt config shell init zsh)"
+
+  # Usage: wt-codex [suffix] [-- codex arguments]
+  wt-codex() {
+    local suffix
+    if (( $# )) && [[ $1 != -- ]]; then
+      suffix=$1
+      shift
+    else
+      suffix=$(openssl rand -hex 6) || return
+    fi
+    [[ ${1-} == -- ]] && shift
+
+    git check-ref-format --branch "$suffix" >/dev/null || return
+    wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
+      switch --create --base=@ --cd -x codex "$suffix" -- "$@"
+  }
+fi
+
 # Completion UX polish
 zmodload zsh/complist
 setopt AUTO_MENU COMPLETE_IN_WORD

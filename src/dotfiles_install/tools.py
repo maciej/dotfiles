@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import os
 import shutil
+import tarfile
 from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import tomllib
 
 from . import state
 from .config import (
@@ -10,6 +16,9 @@ from .config import (
     HELIX_TEMP_MIN_FREE_BYTES,
     KUBECTL_TEMP_MIN_FREE_BYTES,
     KUBIE_TEMP_MIN_FREE_BYTES,
+    WORKTRUNK_LINUX_SHA256,
+    WORKTRUNK_TEMP_MIN_FREE_BYTES,
+    WORKTRUNK_VERSION,
 )
 from .core import (
     command_exists,
@@ -33,6 +42,78 @@ from .downloads import (
 )
 from .errors import InstallerError
 from .package_managers import apt_package_available, is_raspbian_host, sudo_apt_get
+
+
+def cargo_manages_worktrunk() -> bool:
+    roots = {home_dir() / ".cargo"}
+    for name in ("CARGO_HOME", "CARGO_INSTALL_ROOT"):
+        if value := os.environ.get(name):
+            roots.add(Path(value).expanduser())
+    if executable := shutil.which("wt"):
+        executable_path = Path(executable).resolve()
+        if executable_path.parent.name == "bin":
+            roots.add(executable_path.parent.parent)
+
+    for root in roots:
+        if not is_executable(root / "bin/wt"):
+            continue
+        try:
+            with (root / ".crates.toml").open("rb") as metadata:
+                packages = tomllib.load(metadata).get("v1", {})
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if isinstance(packages, dict) and any(
+            package.startswith("worktrunk ") and isinstance(binaries, list) and "wt" in binaries
+            for package, binaries in packages.items()
+        ):
+            return True
+    return False
+
+
+def install_worktrunk_linux_local() -> None:
+    if cargo_manages_worktrunk():
+        log("Worktrunk is managed by Cargo; skipping pinned binary installation")
+        return
+
+    binary_path = home_dir() / ".local/bin/wt"
+    if is_executable(binary_path) and not state.CURRENT_OPTIONS.upgrade:
+        log("Worktrunk already installed")
+        return
+
+    arch = uname("-m")
+    arch = {"arm64": "aarch64", "amd64": "x86_64"}.get(arch, arch)
+    checksum = WORKTRUNK_LINUX_SHA256.get(arch)
+    if checksum is None:
+        log(f"No pinned Worktrunk Linux binary for {arch or 'unknown'}; skipping installation")
+        return
+
+    release = f"worktrunk-{arch}-unknown-linux-musl"
+    asset = f"{release}.tar.xz"
+    url = f"https://github.com/max-sixty/worktrunk/releases/download/v{WORKTRUNK_VERSION}/{asset}"
+    with managed_temp_dir(WORKTRUNK_TEMP_MIN_FREE_BYTES, "Worktrunk archive download", "wt") as temp_dir:
+        archive_path = temp_dir / asset
+        curl_download(url, archive_path)
+        with archive_path.open("rb") as archive_file:
+            digest = hashlib.file_digest(archive_file, "sha256").hexdigest()
+        if digest != checksum:
+            raise InstallerError(f"Worktrunk checksum verification failed for {asset}")
+
+        binary_path.parent.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(prefix=".wt.", dir=binary_path.parent) as staging:
+            staged_binary = Path(staging) / "wt"
+            try:
+                with tarfile.open(archive_path, "r:xz") as archive:
+                    member = archive.getmember(f"{release}/wt")
+                    if not member.isfile() or not member.mode & 0o111:
+                        raise InstallerError(f"Worktrunk archive did not contain an executable wt: {asset}")
+                    with archive.extractfile(member) as source, staged_binary.open("wb") as destination:
+                        shutil.copyfileobj(source, destination)
+            except (KeyError, tarfile.TarError) as exc:
+                raise InstallerError(f"Could not extract wt from Worktrunk archive: {asset}") from exc
+            staged_binary.chmod(0o755)
+            staged_binary.replace(binary_path)
+
+    log(f"Installed Worktrunk {WORKTRUNK_VERSION} in {binary_path}")
 
 
 def install_kubectl_linux_local() -> None:

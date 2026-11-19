@@ -45,6 +45,10 @@ into `~/.codex/skills`. The installer links `scheduled-codex-prompts` only on
 Linux. The skill requires a systemd user manager to schedule prompts. Use
 `stow --no-folding .` for manual Stow runs so the parent directories stay real.
 
+Both Linux install modes install the pinned, SHA-256-verified Worktrunk binary
+into `~/.local/bin` on ARM64 and x86-64. The installer skips Worktrunk if Cargo
+already manages it. Full macOS installs get Worktrunk through Homebrew.
+
 Both install modes set F6 and Shift+Down to decrease Codex reasoning effort
 and F7 and Shift+Up to increase it. Each install reapplies these bindings in
 `~/.codex/config.toml` and preserves the rest of the file.

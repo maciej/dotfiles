@@ -36,6 +36,7 @@ from .tools import (
     install_helix_local,
     install_kubectl_linux_local,
     install_kubie_linux_local,
+    install_worktrunk_linux_local,
 )
 
 
@@ -45,6 +46,8 @@ def local_install(options: Options) -> None:
     install_git_delta_local()
     install_helix_local()
     install_codex_cli_local()
+    if uname("-s") == "Linux":
+        install_worktrunk_linux_local()
     finish_stow_and_shell_setup(options)
 
 
@@ -91,6 +94,8 @@ def main_install(options: Options) -> None:
         log(f"Unsupported package manager on host ({os_name or 'unknown'}); skipping package installation")
         install_optional_tool_groups(options)
 
+    if os_name == "Linux":
+        install_worktrunk_linux_local()
     install_uv_tools()
     install_ghostty_terminfo()
     finish_stow_and_shell_setup(options)
