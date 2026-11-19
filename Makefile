@@ -16,7 +16,7 @@ RUFF_VERSION ?= 0.16.6
 .PHONY: $(KNOWN_TARGETS)
 
 test: test-python
-	uv run --with pytest pytest -q tests
+	uv run --with pytest --with tomlkit==0.15.2 pytest -q tests
 
 test-python:
 	cd toolbox && uv run --group dev pytest

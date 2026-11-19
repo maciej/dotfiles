@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from . import state
+from .codex_config import sync_codex_keybindings
 from .config import LEGACY_STOW_PATHS, PRECREATED_STOW_DIRECTORIES
 from .core import command_exists, home_dir, log, log_err, path_is_inside, run, uname
 from .errors import InstallerError
@@ -314,6 +315,7 @@ def finish_stow_and_shell_setup(options: Options) -> None:
     ensure_ssh_config_fragment_directory()
     link_dotfiles()
     sync_scheduled_codex_prompt_skill()
+    sync_codex_keybindings()
     sync_gitconfig_os()
     ensure_ssh_config_include()
     rebuild_bat_cache()

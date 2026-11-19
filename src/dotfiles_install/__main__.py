@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
+# dependencies = ["tomlkit==0.15.2"]
 # ///
 
 from __future__ import annotations

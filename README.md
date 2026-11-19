@@ -45,6 +45,10 @@ into `~/.codex/skills`. The installer links `scheduled-codex-prompts` only on
 Linux. The skill requires a systemd user manager to schedule prompts. Use
 `stow --no-folding .` for manual Stow runs so the parent directories stay real.
 
+Both install modes set F6 to decrease Codex reasoning effort and F7 to
+increase it. Each install reapplies those two bindings in
+`~/.codex/config.toml` and preserves the rest of the file.
+
 The Obsidian-related skills (`obsidian-cli`, `obsidian-bases`, `obsidian-markdown`,
 `json-canvas`) and the GitHub workflow skills (`github`, `gh-address-comments`,
 `gh-fix-ci`, `gh-yeet`) are also exposed through symlinks under
