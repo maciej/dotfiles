@@ -36,8 +36,8 @@
 	fsmonitor = false
 	untrackedCache = true
 	pager = delta
-[credential]
-	helper = osxkeychain
+[include]
+	path = ~/.gitconfig-os
 [init]
 	defaultBranch = main
 [push]

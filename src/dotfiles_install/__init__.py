@@ -73,6 +73,7 @@ from .shell_setup import (
     rebuild_bat_cache,
     remove_legacy_stow_targets,
     ssh_config_has_include,
+    sync_gitconfig_os,
     sync_zed_settings,
     validate_legacy_stow_targets,
 )
@@ -180,6 +181,7 @@ __all__ = [
     "sanitize_ghostty_terminfo_source",
     "ssh_config_has_include",
     "sudo_apt_get",
+    "sync_gitconfig_os",
     "sync_zed_settings",
     "uname",
     "update_local_install_default_marker",

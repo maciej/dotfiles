@@ -244,6 +244,40 @@ def sync_scheduled_codex_prompt_skill() -> None:
         log(f"Linked Linux-only Codex skill: {target}")
 
 
+GITCONFIG_OS_FRAGMENTS = {
+    "Darwin": Path("git/credential-darwin.gitconfig"),
+    "Linux": Path("git/credential-linux.gitconfig"),
+}
+
+
+def sync_gitconfig_os() -> None:
+    target = home_dir() / ".gitconfig-os"
+    os_name = uname("-s")
+    fragment = GITCONFIG_OS_FRAGMENTS.get(os_name)
+    if fragment is None:
+        log(f"No OS-specific git config for {os_name or 'unknown OS'}; skipping {target}")
+        return
+
+    source = state.DOTFILES_DIR / fragment
+    if os_name == "Linux" and not command_exists("gh"):
+        log_err("gh is not installed; git HTTPS credentials will not work until it is")
+
+    if target.is_symlink():
+        current = resolve_symlink_target_lexically(target, os.readlink(target))
+        if current == source:
+            return
+        if not path_is_inside(current, state.DOTFILES_DIR / "git"):
+            log_err(f"Existing git OS config link left in place: {target}")
+            return
+        target.unlink()
+    elif target.exists():
+        log_err(f"Existing git OS config file left in place: {target}")
+        return
+
+    target.symlink_to(os.path.relpath(source, target.parent.resolve()))
+    log(f"Linked git OS config: {target} -> {fragment}")
+
+
 def sync_zed_settings() -> None:
     script_path = state.DOTFILES_DIR / "scripts/zed-settings"
     if not script_path.is_file():
@@ -280,6 +314,7 @@ def finish_stow_and_shell_setup(options: Options) -> None:
     ensure_ssh_config_fragment_directory()
     link_dotfiles()
     sync_scheduled_codex_prompt_skill()
+    sync_gitconfig_os()
     ensure_ssh_config_include()
     rebuild_bat_cache()
     if options.sync_zed_settings:

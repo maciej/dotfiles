@@ -165,3 +165,75 @@ def test_sync_scheduled_codex_skill_keeps_user_files(temp_home, monkeypatch):
 
     assert not (target / "SKILL.md").is_symlink()
     assert notes.read_text() == "local"
+
+
+@pytest.mark.parametrize(
+    ("os_name", "fragment"),
+    [
+        ("Darwin", "git/credential-darwin.gitconfig"),
+        ("Linux", "git/credential-linux.gitconfig"),
+    ],
+)
+def test_sync_gitconfig_os_links_fragment(temp_home, monkeypatch, os_name, fragment):
+    monkeypatch.setattr(shell_setup, "uname", lambda _: os_name)
+    target = temp_home / ".gitconfig-os"
+
+    shell_setup.sync_gitconfig_os()
+    first_link = os.readlink(target)
+    shell_setup.sync_gitconfig_os()
+
+    assert target.is_symlink()
+    assert os.readlink(target) == first_link
+    assert target.resolve() == (state.DOTFILES_DIR / fragment).resolve()
+
+
+def test_sync_gitconfig_os_replaces_own_stale_link(temp_home, monkeypatch):
+    target = temp_home / ".gitconfig-os"
+    monkeypatch.setattr(shell_setup, "uname", lambda _: "Darwin")
+    shell_setup.sync_gitconfig_os()
+
+    monkeypatch.setattr(shell_setup, "uname", lambda _: "Linux")
+    shell_setup.sync_gitconfig_os()
+
+    assert target.resolve() == (state.DOTFILES_DIR / "git/credential-linux.gitconfig").resolve()
+
+
+def test_sync_gitconfig_os_keeps_user_file(temp_home, monkeypatch, capsys):
+    monkeypatch.setattr(shell_setup, "uname", lambda _: "Linux")
+    target = temp_home / ".gitconfig-os"
+    target.write_text("[user]\n")
+
+    shell_setup.sync_gitconfig_os()
+
+    assert not target.is_symlink()
+    assert target.read_text() == "[user]\n"
+    assert str(target) in capsys.readouterr().err
+
+
+def test_sync_gitconfig_os_keeps_foreign_link(temp_home, monkeypatch):
+    monkeypatch.setattr(shell_setup, "uname", lambda _: "Linux")
+    target = temp_home / ".gitconfig-os"
+    target.symlink_to("/nonexistent/gitconfig")
+
+    shell_setup.sync_gitconfig_os()
+
+    assert os.readlink(target) == "/nonexistent/gitconfig"
+
+
+def test_sync_gitconfig_os_skips_unknown_os(temp_home, monkeypatch):
+    monkeypatch.setattr(shell_setup, "uname", lambda _: "FreeBSD")
+
+    shell_setup.sync_gitconfig_os()
+
+    assert not (temp_home / ".gitconfig-os").exists()
+    assert not (temp_home / ".gitconfig-os").is_symlink()
+
+
+def test_sync_gitconfig_os_warns_without_gh(temp_home, monkeypatch, capsys):
+    monkeypatch.setattr(shell_setup, "uname", lambda _: "Linux")
+    monkeypatch.setattr(shell_setup, "command_exists", lambda _: False)
+
+    shell_setup.sync_gitconfig_os()
+
+    assert "gh is not installed" in capsys.readouterr().err
+    assert (temp_home / ".gitconfig-os").is_symlink()

@@ -15,6 +15,7 @@
 ^/\.config/opencode/opencode\.local\.json$
 ^/\.config/opencode/\.gitignore$
 ^/scripts$
+^/git$
 ^/src$
 ^/tests$
 ^/toolbox$
