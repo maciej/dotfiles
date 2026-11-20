@@ -39,8 +39,10 @@ if status is-interactive; and command -q wt
     command wt config shell init fish | source
     COMPLETE=fish command wt | source
 
-    # Usage: wt-codex [suffix] [-- codex arguments]
-    function wt-codex
+    # Usage: _wt-agent <agent> [suffix] [-- agent arguments]
+    function _wt-agent
+        set -l agent $argv[1]
+        set -e argv[1]
         set -l suffix
         if set -q argv[1]; and test "$argv[1]" != --
             set suffix "$argv[1]"
@@ -54,7 +56,17 @@ if status is-interactive; and command -q wt
 
         git check-ref-format --branch "$suffix" >/dev/null; or return
         wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
-            switch --create --base=@ --cd -x codex "$suffix" -- $argv
+            switch --create --base=@ --cd -x $agent "$suffix" -- $argv
+    end
+
+    # Usage: wt-codex [suffix] [-- codex arguments]
+    function wt-codex
+        _wt-agent codex $argv
+    end
+
+    # Usage: wt-claude [suffix] [-- claude arguments]
+    function wt-claude
+        _wt-agent claude $argv
     end
 end
 

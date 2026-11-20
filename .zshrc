@@ -110,9 +110,10 @@ compinit -d "$HOME/.zcompdump"
 if (( $+commands[wt] )); then
   eval "$(command wt config shell init zsh)"
 
-  # Usage: wt-codex [suffix] [-- codex arguments]
-  wt-codex() {
-    local suffix
+  # Usage: _wt-agent <agent> [suffix] [-- agent arguments]
+  _wt-agent() {
+    local agent=$1 suffix
+    shift
     if (( $# )) && [[ $1 != -- ]]; then
       suffix=$1
       shift
@@ -123,8 +124,14 @@ if (( $+commands[wt] )); then
 
     git check-ref-format --branch "$suffix" >/dev/null || return
     wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
-      switch --create --base=@ --cd -x codex "$suffix" -- "$@"
+      switch --create --base=@ --cd -x "$agent" "$suffix" -- "$@"
   }
+
+  # Usage: wt-codex [suffix] [-- codex arguments]
+  wt-codex() { _wt-agent codex "$@"; }
+
+  # Usage: wt-claude [suffix] [-- claude arguments]
+  wt-claude() { _wt-agent claude "$@"; }
 fi
 
 # Completion UX polish
