@@ -123,7 +123,9 @@ if (( $+commands[wt] )); then
     [[ ${1-} == -- ]] && shift
 
     git check-ref-format --branch "$suffix" >/dev/null || return
+    # Copy files selected by .worktreeinclude before the agent starts.
     wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
+      --config-set 'pre-start.worktreeinclude="wt step copy-ignored --require-include"' \
       switch --create --base=@ --cd -x "$agent" "$suffix" -- "$@"
   }
 

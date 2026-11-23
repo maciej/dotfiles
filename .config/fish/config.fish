@@ -55,7 +55,9 @@ if status is-interactive; and command -q wt
         end
 
         git check-ref-format --branch "$suffix" >/dev/null; or return
+        # Copy files selected by .worktreeinclude before the agent starts.
         wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
+            --config-set 'pre-start.worktreeinclude="wt step copy-ignored --require-include"' \
             switch --create --base=@ --cd -x $agent "$suffix" -- $argv
     end
 
