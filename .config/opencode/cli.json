@@ -3,6 +3,9 @@
   "theme": {
     "name": "catppuccin-macchiato"
   },
+  "tabs": {
+    "mode": "off"
+  },
   "diffs": {
     "wrap": "word"
   },
