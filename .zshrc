@@ -110,33 +110,51 @@ compinit -d "$HOME/.zcompdump"
 if (( $+commands[wt] )); then
   eval "$(command wt config shell init zsh)"
 
-  # Usage: _wt-agent <agent> [suffix] [-- agent arguments]
+  # Usage: _wt-agent <agent> [-b|--base <ref>] [suffix] [-- agent arguments]
+  # wt-agent-switch parses the arguments and creates the worktree. The cd and
+  # the agent launch stay here so this shell is already in the worktree while
+  # the agent runs (wt -x would only cd the shell after the agent exits).
   _wt-agent() {
-    local agent=$1 suffix
+    local agent=$1 cd_file target rc=0
     shift
-    if (( $# )) && [[ $1 != -- ]]; then
-      suffix=$1
-      shift
-    else
-      suffix=$(openssl rand -hex 6) || return
-    fi
-    [[ ${1-} == -- ]] && shift
-
-    git check-ref-format --branch "$suffix" >/dev/null || return
-    # Copy files selected by .worktreeinclude before the agent starts.
-    # Switch first so this shell is already in the worktree while the agent runs
-    # (wt -x would only cd the shell after the agent exits).
-    wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
-      --config-set 'pre-start.worktreeinclude="wt step copy-ignored --require-include"' \
-      switch --create --base=@ --cd "$suffix" || return
-    command "$agent" "$@"
+    cd_file=$(mktemp) || return
+    WORKTRUNK_DIRECTIVE_CD_FILE=$cd_file command wt-agent-switch "$agent" "$@" || rc=$?
+    target=$(<"$cd_file")
+    command rm -f -- "$cd_file"
+    (( rc == 0 )) || return $rc
+    # No worktree path means --help ran; there is nothing to launch.
+    [[ -n $target ]] || return 0
+    builtin cd -- "$target" || return
+    command "$agent" "${(@)argv[${argv[(i)--]}+1,-1]}"
   }
 
-  # Usage: wt-codex [suffix] [-- codex arguments]
+  # Usage: wt-codex [-b|--base <ref>] [suffix] [-- codex arguments]
   wt-codex() { _wt-agent codex "$@"; }
 
-  # Usage: wt-claude [suffix] [-- claude arguments]
+  # Usage: wt-claude [-b|--base <ref>] [suffix] [-- claude arguments]
   wt-claude() { _wt-agent claude "$@"; }
+
+  _wt-agent-base-refs() {
+    local -a refs
+    refs=(${${(f)"$(command wt-agent-switch --complete-base 2>/dev/null)"}/$'\t'/:})
+    _describe -t base-refs 'base ref' refs
+  }
+
+  _wt-agent-complete() {
+    # After --, complete as if the agent itself had been typed.
+    local dashdash=${words[(i)--]}
+    if (( dashdash < CURRENT )); then
+      words=("${words[1]#wt-}" "${(@)words[dashdash+1,-1]}")
+      (( CURRENT -= dashdash - 1 ))
+      _normal
+      return
+    fi
+    _arguments -s -S : \
+      '(- : *)'{-h,--help}'[show help]' \
+      '(-b --base)'{-b+,--base=}'[ref to base the new branch on]:base ref:_wt-agent-base-refs' \
+      '1:new branch name (random if omitted): '
+  }
+  compdef _wt-agent-complete wt-codex wt-claude
 fi
 
 # Completion UX polish

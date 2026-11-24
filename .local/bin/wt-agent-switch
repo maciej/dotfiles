@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Shared backend for the wt-codex / wt-claude shell functions in .zshrc and
+# .config/fish/config.fish: parses their arguments and creates the worktree.
+# The functions then cd into it and launch the agent themselves, so the
+# interactive shell is already in the worktree while the agent runs.
+#
+# Usage: wt-agent-switch <agent> [-b|--base <ref>] [suffix] [-- agent arguments]
+#        wt-agent-switch --complete-base
+#
+# With WORKTRUNK_DIRECTIVE_CD_FILE set, wt writes the worktree path there.
+# Agent arguments are everything after the first --; this script never treats
+# a literal -- as an option value, so callers can split on it.
+set -euo pipefail
+
+complete_base() {
+  printf '%s\t%s\n' '^' 'default branch' '@' 'current HEAD' - 'previous branch'
+  git for-each-ref --format='%(refname:short)%09local branch' refs/heads 2>/dev/null || true
+  git for-each-ref --format='%(refname)' refs/remotes 2>/dev/null |
+    awk 'BEGIN { OFS = "\t" } !/\/HEAD$/ { sub(/^refs\/remotes\//, ""); print $0, "remote branch" }' || true
+}
+
+usage() {
+  cat <<EOF
+Usage: wt-$agent [-b|--base <ref>] [suffix] [-- $agent arguments]
+
+Create a worktree on a new branch and launch $agent in it.
+
+Arguments:
+  suffix            Name of the new branch (default: random hex)
+
+Options:
+  -b, --base <ref>  Ref to base the new branch on (default: @, the current HEAD).
+                    Accepts wt shortcuts: ^ (default branch), - (previous),
+                    pr:<N> (GitHub PR), mr:<N> (GitLab MR)
+  -h, --help        Show this help
+
+Arguments after -- are passed to $agent.
+EOF
+}
+
+die() {
+  printf 'wt-%s: %s\n' "$agent" "$1" >&2
+  exit 2
+}
+
+if [[ ${1-} == --complete-base ]]; then
+  complete_base
+  exit 0
+fi
+if (($# == 0)); then
+  echo 'Usage: wt-agent-switch <agent> [-b|--base <ref>] [suffix] [-- agent arguments]' >&2
+  exit 2
+fi
+
+agent=$1
+shift
+base=@
+suffix=
+has_suffix=0
+while (($#)); do
+  case $1 in
+    --) break ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -b | --base)
+      if (($# < 2)) || [[ $2 == -- ]]; then
+        die "option $1 requires a value"
+      fi
+      base=$2
+      shift 2
+      ;;
+    --base=*)
+      base=${1#--base=}
+      shift
+      ;;
+    -b*)
+      base=${1#-b}
+      shift
+      ;;
+    -*) die "unknown option: $1 (see wt-$agent --help)" ;;
+    *)
+      if ((has_suffix)); then
+        die "unexpected argument: $1 (pass $agent arguments after --)"
+      fi
+      suffix=$1
+      has_suffix=1
+      shift
+      ;;
+  esac
+done
+[[ -n $base ]] || die 'base ref must not be empty'
+if ((!has_suffix)); then
+  suffix=$(openssl rand -hex 6)
+fi
+
+git check-ref-format --branch "$suffix" >/dev/null
+# Copy files selected by .worktreeinclude before the agent starts.
+exec wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
+  --config-set 'pre-start.worktreeinclude="wt step copy-ignored --require-include"' \
+  switch --create --base="$base" --cd "$suffix"

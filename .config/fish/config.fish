@@ -39,39 +39,57 @@ if status is-interactive; and command -q wt
     command wt config shell init fish | source
     COMPLETE=fish command wt | source
 
-    # Usage: _wt-agent <agent> [suffix] [-- agent arguments]
+    # Usage: _wt-agent <agent> [-b|--base <ref>] [suffix] [-- agent arguments]
+    # wt-agent-switch parses the arguments and creates the worktree. The cd and
+    # the agent launch stay here so this shell is already in the worktree while
+    # the agent runs (wt -x would only cd the shell after the agent exits).
     function _wt-agent
         set -l agent $argv[1]
         set -e argv[1]
-        set -l suffix
-        if set -q argv[1]; and test "$argv[1]" != --
-            set suffix "$argv[1]"
-            set -e argv[1]
-        else
-            set suffix (openssl rand -hex 6); or return
-        end
-        if set -q argv[1]; and test "$argv[1]" = --
-            set -e argv[1]
-        end
-
-        git check-ref-format --branch "$suffix" >/dev/null; or return
-        # Copy files selected by .worktreeinclude before the agent starts.
-        # Switch first so this shell is already in the worktree while the agent runs
-        # (wt -x would only cd the shell after the agent exits).
-        wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
-            --config-set 'pre-start.worktreeinclude="wt step copy-ignored --require-include"' \
-            switch --create --base=@ --cd "$suffix"; or return
-        command $agent $argv
+        set -l cd_file (mktemp); or return
+        WORKTRUNK_DIRECTIVE_CD_FILE=$cd_file command wt-agent-switch $agent $argv
+        set -l rc $status
+        set -l target (cat $cd_file)
+        command rm -f -- $cd_file
+        test $rc -eq 0; or return $rc
+        # No worktree path means --help ran; there is nothing to launch.
+        test -n "$target"; or return 0
+        builtin cd -- $target; or return
+        set -l agent_args
+        set -l dashdash (contains --index -- -- $argv)
+        and set agent_args $argv[(math $dashdash + 1)..-1]
+        command $agent $agent_args
     end
 
-    # Usage: wt-codex [suffix] [-- codex arguments]
+    # Usage: wt-codex [-b|--base <ref>] [suffix] [-- codex arguments]
     function wt-codex
         _wt-agent codex $argv
     end
 
-    # Usage: wt-claude [suffix] [-- claude arguments]
+    # Usage: wt-claude [-b|--base <ref>] [suffix] [-- claude arguments]
     function wt-claude
         _wt-agent claude $argv
+    end
+
+    function __wt_agent_after_dashdash
+        contains -- -- (commandline --tokenize --cut-at-cursor)
+    end
+
+    # After --, complete as if the agent itself had been typed.
+    function __wt_agent_complete_agent
+        set -l tokens (commandline --tokenize --cut-at-cursor)
+        set -l dashdash (contains --index -- -- $tokens)
+        set -l agent (string replace -- wt- '' $tokens[1])
+        set -l rest $tokens[(math $dashdash + 1)..-1]
+        complete --do-complete (string join ' ' -- (string escape -- $agent $rest) (commandline --current-token))
+    end
+
+    for agent in codex claude
+        complete -c wt-$agent -f
+        complete -c wt-$agent -n 'not __wt_agent_after_dashdash' -s h -l help -d 'Show help'
+        complete -c wt-$agent -n 'not __wt_agent_after_dashdash' -s b -l base -x \
+            -a '(command wt-agent-switch --complete-base 2>/dev/null)' -d 'Ref to base the new branch on'
+        complete -c wt-$agent -n __wt_agent_after_dashdash -a '(__wt_agent_complete_agent)'
     end
 end
 
