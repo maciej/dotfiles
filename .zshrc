@@ -124,9 +124,12 @@ if (( $+commands[wt] )); then
 
     git check-ref-format --branch "$suffix" >/dev/null || return
     # Copy files selected by .worktreeinclude before the agent starts.
+    # Switch first so this shell is already in the worktree while the agent runs
+    # (wt -x would only cd the shell after the agent exits).
     wt --config-set 'worktree-path="~/.worktrees/{{ repo }}.{{ branch | sanitize }}"' \
       --config-set 'pre-start.worktreeinclude="wt step copy-ignored --require-include"' \
-      switch --create --base=@ --cd -x "$agent" "$suffix" -- "$@"
+      switch --create --base=@ --cd "$suffix" || return
+    command "$agent" "$@"
   }
 
   # Usage: wt-codex [suffix] [-- codex arguments]
