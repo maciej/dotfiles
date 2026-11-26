@@ -72,6 +72,26 @@ The full Homebrew install includes the official `bambu-studio` cask. The stowed
 
 ## Details
 
+### Start a pull request review
+
+From an interactive zsh terminal, run `review-pr` with a GitHub pull request URL.
+
+```zsh
+review-pr https://github.com/example-org/example-project/pull/42
+```
+
+The command looks for `<project>` and then `<org>/<project>` under `~/code` and
+checks their Git fetch remotes against the URL. Set `AGENT_REVIEW_CODE_ROOT` to
+search both layouts under a different directory. The matching remote supplies
+the PR head for a fresh Worktrunk worktree. The shell stays in that worktree
+after the agent closes.
+
+Codex opens by default. Put `--claude` before the URL to open Claude Code. Both
+open with an editable draft that identifies the PR and asks for an explanation
+and review. Press Enter when ready. The Codex launcher uses the idle status
+emitted by recent Codex CLIs to time the paste. If it never receives that
+status, it prints the draft after Codex exits.
+
 ### Zed settings workflow
 
 > Note: the current `zed-settings` handling is a workaround for [zed issue 20038](https://github.com/zed-industries/zed/issues/20038), which requests a JSON import/include mechanism (a settings `includes` file list). Revise the script once that feature is implemented.

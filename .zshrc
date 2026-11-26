@@ -110,13 +110,13 @@ compinit -d "$HOME/.zcompdump"
 if (( $+commands[wt] )); then
   eval "$(command wt config shell init zsh)"
 
-  # Usage: _wt-agent <agent> [-b|--base <ref>] [suffix] [-- agent arguments]
+  # Usage: _wt-agent <agent> <draft> [-b|--base <ref>] [suffix] [-- agent arguments]
   # wt-agent-switch parses the arguments and creates the worktree. The cd and
   # the agent launch stay here so this shell is already in the worktree while
   # the agent runs (wt -x would only cd the shell after the agent exits).
   _wt-agent() {
-    local agent=$1 cd_file target rc=0
-    shift
+    local agent=$1 draft=$2 cd_file target rc=0
+    shift 2
     cd_file=$(mktemp) || return
     WORKTRUNK_DIRECTIVE_CD_FILE=$cd_file command wt-agent-switch "$agent" "$@" || rc=$?
     target=$(<"$cd_file")
@@ -125,14 +125,101 @@ if (( $+commands[wt] )); then
     # No worktree path means --help ran; there is nothing to launch.
     [[ -n $target ]] || return 0
     builtin cd -- "$target" || return
-    command "$agent" "${(@)argv[${argv[(i)--]}+1,-1]}"
+    if [[ -z $draft ]]; then
+      command "$agent" "${(@)argv[${argv[(i)--]}+1,-1]}"
+    elif [[ $agent == claude ]]; then
+      command claude --prefill "$draft"
+    else
+      command codex-paste-draft "$draft"
+    fi
   }
 
   # Usage: wt-codex [-b|--base <ref>] [suffix] [-- codex arguments]
-  wt-codex() { _wt-agent codex "$@"; }
+  wt-codex() { _wt-agent codex '' "$@"; }
 
   # Usage: wt-claude [-b|--base <ref>] [suffix] [-- claude arguments]
-  wt-claude() { _wt-agent claude "$@"; }
+  wt-claude() { _wt-agent claude '' "$@"; }
+
+  review-pr() {
+    emulate -L zsh
+    setopt extendedglob
+    local usage='Usage: review-pr [--claude] <GitHub pull request URL>'
+    local agent=codex
+    if [[ ${1-} == --claude ]]; then
+      agent=claude
+      shift
+    fi
+    local pr_pattern='^https://github[.]com/([a-zA-Z0-9-]{1,39})/([a-zA-Z0-9_.-]{1,100})/pull/([1-9][0-9]{0,19})([/?#].*)?$'
+    local remote_pattern='^(https://([^/@[:space:]]+@)?github[.]com(:443)?/|ssh://git@(github[.]com(:22)?|ssh[.]github[.]com:443)/|git@github[.]com:)(.+)$'
+    if (( $# == 1 )) && [[ $1 == -h || $1 == --help ]]; then
+      print -r -- "$usage"
+      return 0
+    fi
+    if (( $# != 1 )) || [[ ! $1 =~ $pr_pattern || $match[2] == . || $match[2] == .. ]]; then
+      print -ru2 -- "$usage"
+      return 2
+    fi
+    local owner=$match[1] project=$match[2] number=$match[3]
+    local slug=${(L)owner}/${(L)project}
+    local url="https://github.com/$owner/$project/pull/$number"
+    local code_root=${AGENT_REVIEW_CODE_ROOT:-$HOME/code}
+    # Prefer an exact spelling within each layout, then match directory names
+    # case-insensitively, as GitHub does. The remotes still determine identity.
+    local -aU checkouts=(
+      "$code_root/$project" "$code_root"/(#i)"$project"(N-/)
+      "$code_root/$owner/$project" "$code_root"/(#i)"$owner"/"$project"(N-/)
+    )
+    local checkout repo_root remote fetch_url remote_slug
+    for checkout in "${checkouts[@]}"; do
+      repo_root=$(command git -C "$checkout" rev-parse --show-toplevel 2>/dev/null) || continue
+      [[ ${repo_root:A} == ${checkout:A} ]] || continue
+      for remote in ${(f)"$(command git -C "$checkout" remote)"}; do
+        fetch_url=$(command git -C "$checkout" remote get-url -- "$remote") || continue
+        [[ ${(L)fetch_url} =~ $remote_pattern ]] || continue
+        remote_slug=${match[-1]%/}
+        [[ ${remote_slug%.git} == $slug ]] && break 2
+      done
+      remote=''
+    done
+    if [[ -z $remote ]]; then
+      print -ru2 -- "review-pr: no checkout of $owner/$project found under $code_root"
+      return 1
+    fi
+    if [[ ! -t 0 || ! -t 1 ]]; then
+      print -ru2 -- 'review-pr: an interactive terminal is required'
+      return 1
+    fi
+    if (( ! $+commands[$agent] )); then
+      print -ru2 -- "review-pr: $agent is required"
+      return 1
+    fi
+    if [[ $agent == codex ]] && (( ! $+commands[codex-paste-draft] )); then
+      print -ru2 -- 'review-pr: codex-paste-draft is required'
+      return 1
+    fi
+
+    local draft="This worktree is at the head of $url.
+
+Explain and review the PR."
+    local nonce branch review_ref head
+    nonce=$(command openssl rand -hex 6) || return
+    branch="review-$number-$nonce"
+    review_ref="refs/codex/reviews/$branch"
+    # review-pr assumes the repository and its PRs are trusted. Git and Worktrunk
+    # hooks can run during worktree setup. Codex and Claude manage workspace trust
+    # and can inherit it from the main checkout. Trusted project settings can
+    # start processes before the draft is submitted.
+    # A per-run ref keeps parallel fetches from sharing FETCH_HEAD.
+    {
+      command git -C "$checkout" fetch --no-tags --no-write-fetch-head --no-recurse-submodules \
+        -- "$remote" "refs/pull/$number/head:$review_ref" || return
+      head=$(command git -C "$checkout" rev-parse --verify "$review_ref^{commit}") || return
+      builtin cd -- "$checkout" || return
+      _wt-agent "$agent" "$draft" --base "$head" "$branch"
+    } always {
+      command git -C "$repo_root" update-ref -d "$review_ref"
+    }
+  }
 
   _wt-agent-base-refs() {
     local -a refs
