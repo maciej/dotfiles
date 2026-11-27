@@ -1,0 +1,5 @@
+interface:
+  display_name: "Codex App Server Troubleshooting"
+
+policy:
+  allow_implicit_invocation: false
