@@ -3,5 +3,16 @@
   "permission": {
     "read": { "/tmp/**": "allow", "/private/tmp/**": "allow" },
     "edit": { "/tmp/**": "allow", "/private/tmp/**": "allow" }
+  },
+  "mcp": {
+    "servers": {
+      "solidcraft": {
+        "type": "local",
+        "command": [
+          "/Applications/SolidCraft.app/Contents/MacOS/solidcraft-cli",
+          "mcp"
+        ]
+      }
+    }
   }
 }
